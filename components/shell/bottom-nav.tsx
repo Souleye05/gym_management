@@ -3,19 +3,25 @@
 import { QrCode } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useCurrentUser } from '@/components/providers/user-provider'
 import { cn } from '@/lib/utils'
 import { bottomNav } from './nav-config'
 
 export function BottomNav() {
   const pathname = usePathname()
+  const user = useCurrentUser()
+  const items = bottomNav.filter((item) => item.roles.includes(user.role))
 
   return (
     <nav
       aria-label="Navigation principale"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
     >
-      <div className="grid grid-cols-5 items-end">
-        {bottomNav.map((item) => {
+      <div
+        className="grid items-end"
+        style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+      >
+        {items.map((item) => {
           const active = pathname === item.href
           const isScan = item.href === '/scan'
           const Icon = item.icon
