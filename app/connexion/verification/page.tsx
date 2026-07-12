@@ -29,7 +29,7 @@ function VerificationForm() {
       setCode('')
       return
     }
-    router.push('/')
+    router.push('/accueil')
   }
 
   return (

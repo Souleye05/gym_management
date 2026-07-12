@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createAuthService } from '@/lib/auth/auth-service'
 import { localStorageSessionRepository } from '@/lib/auth/session-repository'
-import type { AuthError, Session, StaffCredentials, StaffSession } from '@/lib/auth/types'
+import type { AuthError, ClientSession, Session, StaffCredentials, StaffSession } from '@/lib/auth/types'
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 
@@ -105,6 +105,14 @@ export function useCurrentUser(): StaffSession {
   const { session } = useAuth()
   if (!session || session.kind !== 'staff') {
     throw new Error('useCurrentUser must be used within an authenticated staff session')
+  }
+  return session
+}
+
+export function useCurrentClient(): ClientSession {
+  const { session } = useAuth()
+  if (!session || session.kind !== 'client') {
+    throw new Error('useCurrentClient must be used within an authenticated client session')
   }
   return session
 }
