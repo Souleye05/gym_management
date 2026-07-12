@@ -8,7 +8,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-import type { Role } from '@/lib/current-user'
+import type { Role } from '@/lib/auth/types'
 
 export type NavItem = {
   label: string
