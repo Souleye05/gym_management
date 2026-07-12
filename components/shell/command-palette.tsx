@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { CornerDownLeft, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
+import { useCurrentUser } from '@/components/providers/user-provider'
 import { primaryNav, secondaryNav } from './nav-config'
 
 const quickActions = [
@@ -21,13 +22,16 @@ export function CommandPalette({
   onOpenChange: (open: boolean) => void
 }) {
   const router = useRouter()
+  const user = useCurrentUser()
   const [query, setQuery] = useState('')
 
-  const pages = [...primaryNav, ...secondaryNav].map((item) => ({
-    label: item.label,
-    href: item.href,
-    hint: 'Page',
-  }))
+  const pages = [...primaryNav, ...secondaryNav]
+    .filter((item) => item.roles.includes(user.role))
+    .map((item) => ({
+      label: item.label,
+      href: item.href,
+      hint: 'Page',
+    }))
 
   const results = useMemo(() => {
     const all = [...quickActions, ...pages]
