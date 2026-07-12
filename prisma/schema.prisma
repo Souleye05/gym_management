@@ -1,0 +1,121 @@
+// Prisma schema — Auth API sub-project
+// See docs/superpowers/specs/2026-07-12-auth-api-design.md for the full design rationale.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum LoginKind {
+  STAFF
+  CLIENT
+}
+
+model StaffAccount {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(AGENT)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  loginAttempts LoginAttempt[]
+  loginLogs     LoginLog[]
+
+  @@map("staff_accounts")
+}
+
+model ClientAccount {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  otpCodes      OtpCode[]
+  refreshTokens RefreshToken[]
+  loginLogs     LoginLog[]
+
+  @@map("client_accounts")
+}
+
+model RefreshToken {
+  id              String    @id @default(cuid())
+  tokenHash       String    @unique
+  staffAccountId  String?
+  clientAccountId String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  userAgent       String?
+  ipAddress       String?
+
+  staffAccount  StaffAccount?  @relation(fields: [staffAccountId], references: [id], onDelete: Cascade)
+  clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@index([staffAccountId])
+  @@index([clientAccountId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model OtpCode {
+  id              String    @id @default(cuid())
+  clientAccountId String
+  codeHash        String
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  attempts        Int       @default(0)
+  createdAt       DateTime  @default(now())
+
+  clientAccount ClientAccount @relation(fields: [clientAccountId], references: [id], onDelete: Cascade)
+
+  @@index([clientAccountId, createdAt])
+  @@map("otp_codes")
+}
+
+model LoginAttempt {
+  id             String   @id @default(cuid())
+  staffAccountId String?
+  identifier     String
+  succeeded      Boolean
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  staffAccount StaffAccount? @relation(fields: [staffAccountId], references: [id], onDelete: SetNull)
+
+  @@index([identifier, createdAt])
+  @@map("login_attempts")
+}
+
+model LoginLog {
+  id              String    @id @default(cuid())
+  kind            LoginKind
+  staffAccountId  String?
+  clientAccountId String?
+  succeeded       Boolean
+  reason          String?
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime  @default(now())
+
+  staffAccount  StaffAccount?  @relation(fields: [staffAccountId], references: [id], onDelete: SetNull)
+  clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id], onDelete: SetNull)
+
+  @@index([staffAccountId, createdAt])
+  @@index([clientAccountId, createdAt])
+  @@map("login_logs")
+}
