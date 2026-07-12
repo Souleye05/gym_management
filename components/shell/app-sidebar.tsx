@@ -5,11 +5,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { useCurrentUser } from '@/components/providers/user-provider'
 import { cn } from '@/lib/utils'
 import { primaryNav, secondaryNav } from './nav-config'
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const user = useCurrentUser()
+  const visiblePrimary = primaryNav.filter((item) => item.roles.includes(user.role))
+  const visibleSecondary = secondaryNav.filter((item) => item.roles.includes(user.role))
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
@@ -27,26 +31,28 @@ export function AppSidebar() {
         <p className="px-3 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           Général
         </p>
-        {primaryNav.map((item) => (
+        {visiblePrimary.map((item) => (
           <NavLink key={item.href} item={item} active={pathname === item.href} />
         ))}
 
-        <p className="px-3 pt-5 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Système
-        </p>
-        {secondaryNav.map((item) => (
-          <NavLink key={item.href} item={item} active={pathname === item.href} />
-        ))}
+        {visibleSecondary.length > 0 && (
+          <>
+            <p className="px-3 pt-5 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Système
+            </p>
+            {visibleSecondary.map((item) => (
+              <NavLink key={item.href} item={item} active={pathname === item.href} />
+            ))}
+          </>
+        )}
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
         <div className="flex items-center gap-3 rounded-xl px-2 py-2">
-          <Avatar name="Admin Studio" className="bg-primary/10 text-primary" />
+          <Avatar name={user.name} className="bg-primary/10 text-primary" />
           <div className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate text-sm font-medium">Admin Studio</span>
-            <span className="truncate text-xs text-muted-foreground">
-              admin@atlas.fit
-            </span>
+            <span className="truncate text-sm font-medium">{user.name}</span>
+            <span className="truncate text-xs text-muted-foreground">{user.email}</span>
           </div>
         </div>
       </div>
