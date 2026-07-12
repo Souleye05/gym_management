@@ -28,13 +28,33 @@ describe('PrismaOtpRepository', () => {
 
   it('returns the most recently created OTP when multiple exist', async () => {
     const client = await createClient()
-    await repository.create({ clientAccountId: client.id, codeHash: 'older', expiresAt: inTenMinutes() })
-    await new Promise((resolve) => setTimeout(resolve, 5))
-    await repository.create({ clientAccountId: client.id, codeHash: 'newer', expiresAt: inTenMinutes() })
+    const now = Date.now()
+    await prismaClient.otpCode.create({
+      data: { clientAccountId: client.id, codeHash: 'older', expiresAt: inTenMinutes(), createdAt: new Date(now) },
+    })
+    await prismaClient.otpCode.create({
+      data: { clientAccountId: client.id, codeHash: 'newer', expiresAt: inTenMinutes(), createdAt: new Date(now + 1000) },
+    })
 
     const found = await repository.findLatestValid(client.id)
 
     expect(found?.codeHash).toBe('newer')
+  })
+
+  it('breaks createdAt ties deterministically by id', async () => {
+    const client = await createClient()
+    const tiedCreatedAt = new Date()
+    const first = await prismaClient.otpCode.create({
+      data: { clientAccountId: client.id, codeHash: 'tie-a', expiresAt: inTenMinutes(), createdAt: tiedCreatedAt },
+    })
+    const second = await prismaClient.otpCode.create({
+      data: { clientAccountId: client.id, codeHash: 'tie-b', expiresAt: inTenMinutes(), createdAt: tiedCreatedAt },
+    })
+    const expectedId = first.id > second.id ? first.id : second.id
+
+    const found = await repository.findLatestValid(client.id)
+
+    expect(found?.id).toBe(expectedId)
   })
 
   it('does not find an expired OTP', async () => {
@@ -58,6 +78,30 @@ describe('PrismaOtpRepository', () => {
     const found = await repository.findLatestValid(client.id)
 
     expect(found).toBeNull()
+  })
+
+  it('consume returns true the first time and false on a repeat call', async () => {
+    const client = await createClient()
+    const created = await prismaClient.otpCode.create({
+      data: { clientAccountId: client.id, codeHash: 'hash-c', expiresAt: inTenMinutes() },
+    })
+
+    const first = await repository.consume(created.id)
+    const second = await repository.consume(created.id)
+
+    expect(first).toBe(true)
+    expect(second).toBe(false)
+  })
+
+  it('only one of two concurrent consume calls on the same OTP succeeds', async () => {
+    const client = await createClient()
+    const created = await prismaClient.otpCode.create({
+      data: { clientAccountId: client.id, codeHash: 'hash-d', expiresAt: inTenMinutes() },
+    })
+
+    const [first, second] = await Promise.all([repository.consume(created.id), repository.consume(created.id)])
+
+    expect([first, second].filter(Boolean)).toHaveLength(1)
   })
 
   it('increments attempts', async () => {

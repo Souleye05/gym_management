@@ -17,7 +17,7 @@ export class PrismaOtpRepository implements OtpRepository {
   async findLatestValid(clientAccountId: string): Promise<OtpRecord | null> {
     return this.prisma.otpCode.findFirst({
       where: { clientAccountId, consumedAt: null, expiresAt: { gt: new Date() } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     })
   }
 
@@ -28,10 +28,11 @@ export class PrismaOtpRepository implements OtpRepository {
     })
   }
 
-  async consume(id: string): Promise<void> {
-    await this.prisma.otpCode.update({
-      where: { id },
+  async consume(id: string): Promise<boolean> {
+    const { count } = await this.prisma.otpCode.updateMany({
+      where: { id, consumedAt: null },
       data: { consumedAt: new Date() },
     })
+    return count > 0
   }
 }

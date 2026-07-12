@@ -18,5 +18,6 @@ export interface OtpRepository {
   /** Returns the most recent, unconsumed, unexpired OTP for the account, or null. */
   findLatestValid(clientAccountId: string): Promise<OtpRecord | null>
   incrementAttempts(id: string): Promise<void>
-  consume(id: string): Promise<void>
+  /** Marks the OTP as consumed iff it isn't already. Returns false if it was already consumed. */
+  consume(id: string): Promise<boolean>
 }
