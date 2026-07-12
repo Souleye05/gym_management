@@ -1,11 +1,22 @@
 'use client'
 
-import { Bell, Command, Dumbbell, Plus, Search } from 'lucide-react'
+import { Bell, Command, Dumbbell, LogOut, Plus, Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { useAuth, useCurrentUser } from '@/components/providers/user-provider'
 
 export function Topbar({ onOpenCommand }: { onOpenCommand: () => void }) {
+  const router = useRouter()
+  const user = useCurrentUser()
+  const { logout } = useAuth()
+
+  const handleLogout = async () => {
+    await logout()
+    router.replace('/login')
+  }
+
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-xl lg:px-8">
       {/* Mobile brand */}
@@ -46,7 +57,11 @@ export function Topbar({ onOpenCommand }: { onOpenCommand: () => void }) {
 
         <ThemeToggle />
 
-        <Avatar name="Admin Studio" className="bg-primary/10 text-primary" />
+        <Avatar name={user.name} className="bg-primary/10 text-primary" />
+
+        <Button variant="ghost" size="icon" aria-label="Déconnexion" onClick={handleLogout}>
+          <LogOut className="size-4" />
+        </Button>
       </div>
     </header>
   )
