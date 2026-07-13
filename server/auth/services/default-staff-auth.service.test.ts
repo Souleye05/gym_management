@@ -253,16 +253,17 @@ describe('DefaultStaffAuthService.getMe', () => {
 })
 
 describe('DefaultStaffAuthService.refresh', () => {
+  const VALID_STAFF_RECORD: RefreshTokenRecord = {
+    id: 'rt1',
+    tokenHash: 'hashed-refresh-raw-token',
+    staffAccountId: 's1',
+    clientAccountId: null,
+    expiresAt: new Date(Date.now() + 1000),
+    revokedAt: null,
+  }
+
   it('rotates the refresh token on success', async () => {
-    const validStored: RefreshTokenRecord = {
-      id: 'rt1',
-      tokenHash: 'hashed-refresh-raw-token',
-      staffAccountId: 's1',
-      clientAccountId: null,
-      expiresAt: new Date(Date.now() + 1000),
-      revokedAt: null,
-    }
-    const refreshTokens = fakeRefreshTokenRepository(validStored)
+    const refreshTokens = fakeRefreshTokenRepository()
     const service = new DefaultStaffAuthService(
       fakeStaffAccountRepository(),
       refreshTokens.repository,
@@ -273,7 +274,7 @@ describe('DefaultStaffAuthService.refresh', () => {
       allowingRateLimit(),
     )
 
-    const result = await service.refresh('refresh-raw-token')
+    const result = await service.refresh(VALID_STAFF_RECORD)
 
     expect(result.ok).toBe(true)
     expect(refreshTokens.revoked).toContain('hashed-refresh-raw-token')
@@ -281,20 +282,12 @@ describe('DefaultStaffAuthService.refresh', () => {
   })
 
   it('does not revoke the old token if issuing the new one fails', async () => {
-    const validStored: RefreshTokenRecord = {
-      id: 'rt1',
-      tokenHash: 'hashed-refresh-raw-token',
-      staffAccountId: 's1',
-      clientAccountId: null,
-      expiresAt: new Date(Date.now() + 1000),
-      revokedAt: null,
-    }
     const revoked: string[] = []
     const failingRefreshTokens: RefreshTokenRepository = {
       create: async () => {
         throw new Error('transient database error')
       },
-      findValidByHash: async () => validStored,
+      findValidByHash: async () => VALID_STAFF_RECORD,
       revoke: async (tokenHash) => {
         revoked.push(tokenHash)
       },
@@ -309,28 +302,11 @@ describe('DefaultStaffAuthService.refresh', () => {
       allowingRateLimit(),
     )
 
-    await expect(service.refresh('refresh-raw-token')).rejects.toThrow('transient database error')
+    await expect(service.refresh(VALID_STAFF_RECORD)).rejects.toThrow('transient database error')
     expect(revoked).toHaveLength(0)
   })
 
-  it('rejects an unknown or expired refresh token', async () => {
-    const service = new DefaultStaffAuthService(
-      fakeStaffAccountRepository(),
-      fakeRefreshTokenRepository(null).repository,
-      fakeLoginAttemptRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakePasswordService(true),
-      fakeTokenService(),
-      allowingRateLimit(),
-    )
-
-    const result = await service.refresh('unknown-token')
-
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error.code).toBe('invalid-refresh-token')
-  })
-
-  it('rejects a refresh token owned by a client, not a staff account', async () => {
+  it('rejects a refresh token record with no staff account (e.g. owned by a client)', async () => {
     const clientOwned: RefreshTokenRecord = {
       id: 'rt2',
       tokenHash: 'hashed-refresh-raw-token',
@@ -341,7 +317,7 @@ describe('DefaultStaffAuthService.refresh', () => {
     }
     const service = new DefaultStaffAuthService(
       fakeStaffAccountRepository(),
-      fakeRefreshTokenRepository(clientOwned).repository,
+      fakeRefreshTokenRepository().repository,
       fakeLoginAttemptRepository().repository,
       fakeLoginLogRepository().repository,
       fakePasswordService(true),
@@ -349,10 +325,28 @@ describe('DefaultStaffAuthService.refresh', () => {
       allowingRateLimit(),
     )
 
-    const result = await service.refresh('refresh-raw-token')
+    const result = await service.refresh(clientOwned)
 
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('invalid-refresh-token')
+  })
+
+  it('rejects when the account is inactive', async () => {
+    const inactive: StaffAccountRecord = { ...ACCOUNT, isActive: false }
+    const service = new DefaultStaffAuthService(
+      fakeStaffAccountRepository(inactive),
+      fakeRefreshTokenRepository().repository,
+      fakeLoginAttemptRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakePasswordService(true),
+      fakeTokenService(),
+      allowingRateLimit(),
+    )
+
+    const result = await service.refresh(VALID_STAFF_RECORD)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('account-inactive')
   })
 })
 

@@ -6,7 +6,7 @@ import type { StaffUser } from '../domain/entities'
 import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { AuthTokens } from '../domain/tokens'
 import type { StaffAccountRepository } from '../repositories/staff-account.repository'
-import type { RefreshTokenRepository } from '../repositories/refresh-token.repository'
+import type { RefreshTokenRecord, RefreshTokenRepository } from '../repositories/refresh-token.repository'
 import type { LoginAttemptRepository } from '../repositories/login-attempt.repository'
 import type { LoginLogRepository } from '../repositories/login-log.repository'
 import type { PasswordService } from './password.service'
@@ -93,20 +93,18 @@ export class DefaultStaffAuthService implements StaffAuthService {
     return ok({ id: account.id, name: account.name, email: account.email, role: account.role })
   }
 
-  async refresh(refreshToken: string): Promise<Result<AuthTokens, AuthDomainError>> {
-    const tokenHash = this.tokenService.hashRefreshToken(refreshToken)
-    const stored = await this.refreshTokenRepository.findValidByHash(tokenHash)
-    if (!stored || !stored.staffAccountId) {
+  async refresh(record: RefreshTokenRecord): Promise<Result<AuthTokens, AuthDomainError>> {
+    if (!record.staffAccountId) {
       return err({ code: 'invalid-refresh-token', message: 'Session expirée.' })
     }
 
-    const account = await this.staffAccountRepository.findById(stored.staffAccountId)
+    const account = await this.staffAccountRepository.findById(record.staffAccountId)
     if (!account || !account.isActive) {
       return err({ code: 'account-inactive', message: 'Compte désactivé.' })
     }
 
     const tokens = await this.issueTokens(account.id, account.role, {})
-    await this.refreshTokenRepository.revoke(tokenHash)
+    await this.refreshTokenRepository.revoke(record.tokenHash)
 
     return ok(tokens)
   }

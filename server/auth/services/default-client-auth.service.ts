@@ -6,7 +6,7 @@ import type { ClientUser } from '../domain/entities'
 import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { AuthTokens } from '../domain/tokens'
 import type { ClientAccountRepository } from '../repositories/client-account.repository'
-import type { RefreshTokenRepository } from '../repositories/refresh-token.repository'
+import type { RefreshTokenRecord, RefreshTokenRepository } from '../repositories/refresh-token.repository'
 import type { OtpRepository } from '../repositories/otp.repository'
 import type { LoginLogRepository } from '../repositories/login-log.repository'
 import type { OtpService } from './otp.service'
@@ -109,20 +109,18 @@ export class DefaultClientAuthService implements ClientAuthService {
     return ok({ id: account.id, name: account.name, phone: account.phone })
   }
 
-  async refresh(refreshToken: string): Promise<Result<AuthTokens, AuthDomainError>> {
-    const tokenHash = this.tokenService.hashRefreshToken(refreshToken)
-    const stored = await this.refreshTokenRepository.findValidByHash(tokenHash)
-    if (!stored || !stored.clientAccountId) {
+  async refresh(record: RefreshTokenRecord): Promise<Result<AuthTokens, AuthDomainError>> {
+    if (!record.clientAccountId) {
       return err({ code: 'invalid-refresh-token', message: 'Session expirée.' })
     }
 
-    const account = await this.clientAccountRepository.findById(stored.clientAccountId)
+    const account = await this.clientAccountRepository.findById(record.clientAccountId)
     if (!account || !account.isActive) {
       return err({ code: 'account-inactive', message: 'Compte désactivé.' })
     }
 
     const tokens = await this.issueTokens(account.id, {})
-    await this.refreshTokenRepository.revoke(tokenHash)
+    await this.refreshTokenRepository.revoke(record.tokenHash)
 
     return ok(tokens)
   }

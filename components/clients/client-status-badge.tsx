@@ -5,6 +5,7 @@ const STATUS_CONFIG: Record<ClientStatus, { label: string; variant: 'success' | 
   active: { label: 'Actif', variant: 'success' },
   expiring: { label: 'Expire bientôt', variant: 'warning' },
   expired: { label: 'Expiré', variant: 'destructive' },
+  suspended: { label: 'Suspendu', variant: 'muted' },
   none: { label: 'Aucun abonnement', variant: 'muted' },
 }
 

@@ -5,20 +5,23 @@ import { statusForDomainError } from '../../shared/http-status'
 import { getContainer } from '../../shared/container'
 import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 
+const INVALID_REFRESH_TOKEN = { code: 'invalid-refresh-token' as const, message: 'Session expirée.' }
+
 export async function refreshController(req: NextRequest): Promise<NextResponse> {
   const refreshToken = readRefreshTokenCookie(req)
   if (!refreshToken) {
-    return NextResponse.json(apiFailureFromDomainError({ code: 'invalid-refresh-token', message: 'Session expirée.' }), {
-      status: 401,
-    })
+    return NextResponse.json(apiFailureFromDomainError(INVALID_REFRESH_TOKEN), { status: 401 })
   }
 
-  const { staffAuthService, clientAuthService } = getContainer()
+  const { refreshTokenLookupService, staffAuthService, clientAuthService } = getContainer()
+  const record = await refreshTokenLookupService.findValid(refreshToken)
+  if (!record) {
+    return NextResponse.json(apiFailureFromDomainError(INVALID_REFRESH_TOKEN), { status: 401 })
+  }
 
-  const staffResult = await staffAuthService.refresh(refreshToken)
-  const result = staffResult.ok || staffResult.error.code !== 'invalid-refresh-token'
-    ? staffResult
-    : await clientAuthService.refresh(refreshToken)
+  const result = record.staffAccountId
+    ? await staffAuthService.refresh(record)
+    : await clientAuthService.refresh(record)
 
   if (!result.ok) {
     return NextResponse.json(apiFailureFromDomainError(result.error), { status: statusForDomainError(result.error) })

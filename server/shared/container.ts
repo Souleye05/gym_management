@@ -11,12 +11,15 @@ import { Sha256OtpService } from '../auth/infrastructure/sha256-otp.service'
 import { LoginRateLimitService } from '../auth/services/login-rate-limit.service'
 import { DefaultStaffAuthService } from '../auth/services/default-staff-auth.service'
 import { DefaultClientAuthService } from '../auth/services/default-client-auth.service'
+import { DefaultRefreshTokenLookupService } from '../auth/services/default-refresh-token-lookup.service'
 import type { StaffAuthService } from '../auth/services/staff-auth.service'
 import type { ClientAuthService } from '../auth/services/client-auth.service'
+import type { RefreshTokenLookupService } from '../auth/services/refresh-token-lookup.service'
 
 export type Container = {
   staffAuthService: StaffAuthService
   clientAuthService: ClientAuthService
+  refreshTokenLookupService: RefreshTokenLookupService
 }
 
 function createContainer(): Container {
@@ -36,6 +39,7 @@ function createContainer(): Container {
   const tokenService = new JwtTokenService(jwtSecret)
   const otpService = new Sha256OtpService()
   const rateLimitService = new LoginRateLimitService(loginAttemptRepository)
+  const refreshTokenLookupService = new DefaultRefreshTokenLookupService(refreshTokenRepository, tokenService)
 
   const staffAuthService = new DefaultStaffAuthService(
     staffAccountRepository,
@@ -56,7 +60,7 @@ function createContainer(): Container {
     tokenService,
   )
 
-  return { staffAuthService, clientAuthService }
+  return { staffAuthService, clientAuthService, refreshTokenLookupService }
 }
 
 declare global {
