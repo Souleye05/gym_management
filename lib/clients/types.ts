@@ -1,4 +1,4 @@
-export type ClientStatus = 'active' | 'expiring' | 'expired' | 'none'
+export type ClientStatus = 'active' | 'expiring' | 'expired' | 'suspended' | 'none'
 
 export type Client = {
   id: string
@@ -6,6 +6,5 @@ export type Client = {
   phone: string
   email?: string
   cardNumber: string
-  status: ClientStatus
   joinedAt: string
 }
