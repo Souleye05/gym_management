@@ -301,6 +301,133 @@ describe('DefaultClientAuthService.getMe', () => {
   })
 })
 
+describe('DefaultClientAuthService.refresh', () => {
+  it('rotates the refresh token on success', async () => {
+    const validStored: RefreshTokenRecord = {
+      id: 'rt1',
+      tokenHash: 'hashed-refresh-raw-token',
+      staffAccountId: null,
+      clientAccountId: 'c1',
+      expiresAt: new Date(Date.now() + 1000),
+      revokedAt: null,
+    }
+    const refreshTokens = fakeRefreshTokenRepository(validStored)
+    const service = new DefaultClientAuthService(
+      fakeClientAccountRepository(),
+      refreshTokens.repository,
+      fakeOtpRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(true),
+      fakeTokenService(),
+    )
+
+    const result = await service.refresh('refresh-raw-token')
+
+    expect(result.ok).toBe(true)
+    expect(refreshTokens.revoked).toContain('hashed-refresh-raw-token')
+    expect(refreshTokens.created).toHaveLength(1)
+    const expectedExpiry = Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000
+    expect(refreshTokens.created[0].expiresAt.getTime()).toBeCloseTo(expectedExpiry, -3)
+  })
+
+  it('does not revoke the old token if issuing the new one fails', async () => {
+    const validStored: RefreshTokenRecord = {
+      id: 'rt1',
+      tokenHash: 'hashed-refresh-raw-token',
+      staffAccountId: null,
+      clientAccountId: 'c1',
+      expiresAt: new Date(Date.now() + 1000),
+      revokedAt: null,
+    }
+    const revoked: string[] = []
+    const failingRefreshTokens: RefreshTokenRepository = {
+      create: async () => {
+        throw new Error('transient database error')
+      },
+      findValidByHash: async () => validStored,
+      revoke: async (tokenHash) => {
+        revoked.push(tokenHash)
+      },
+    }
+    const service = new DefaultClientAuthService(
+      fakeClientAccountRepository(),
+      failingRefreshTokens,
+      fakeOtpRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(true),
+      fakeTokenService(),
+    )
+
+    await expect(service.refresh('refresh-raw-token')).rejects.toThrow('transient database error')
+    expect(revoked).toHaveLength(0)
+  })
+
+  it('rejects an unknown or expired refresh token', async () => {
+    const service = new DefaultClientAuthService(
+      fakeClientAccountRepository(),
+      fakeRefreshTokenRepository(null).repository,
+      fakeOtpRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(true),
+      fakeTokenService(),
+    )
+
+    const result = await service.refresh('unknown-token')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('invalid-refresh-token')
+  })
+
+  it('rejects a refresh token owned by a staff account, not a client', async () => {
+    const staffOwned: RefreshTokenRecord = {
+      id: 'rt2',
+      tokenHash: 'hashed-refresh-raw-token',
+      staffAccountId: 's1',
+      clientAccountId: null,
+      expiresAt: new Date(Date.now() + 1000),
+      revokedAt: null,
+    }
+    const service = new DefaultClientAuthService(
+      fakeClientAccountRepository(),
+      fakeRefreshTokenRepository(staffOwned).repository,
+      fakeOtpRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(true),
+      fakeTokenService(),
+    )
+
+    const result = await service.refresh('refresh-raw-token')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('invalid-refresh-token')
+  })
+
+  it('rejects when the account is inactive', async () => {
+    const validStored: RefreshTokenRecord = {
+      id: 'rt1',
+      tokenHash: 'hashed-refresh-raw-token',
+      staffAccountId: null,
+      clientAccountId: 'c1',
+      expiresAt: new Date(Date.now() + 1000),
+      revokedAt: null,
+    }
+    const inactive: ClientAccountRecord = { ...ACCOUNT, isActive: false }
+    const service = new DefaultClientAuthService(
+      fakeClientAccountRepository(inactive),
+      fakeRefreshTokenRepository(validStored).repository,
+      fakeOtpRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(true),
+      fakeTokenService(),
+    )
+
+    const result = await service.refresh('refresh-raw-token')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('account-inactive')
+  })
+})
+
 describe('DefaultClientAuthService.logout', () => {
   it('revokes the refresh token', async () => {
     const refreshTokens = fakeRefreshTokenRepository()

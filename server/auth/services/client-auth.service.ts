@@ -10,4 +10,5 @@ export interface ClientAuthService {
   verifyOtp(input: VerifyOtpDto, context: RequestContext): Promise<Result<{ user: ClientUser; tokens: AuthTokens }, AuthDomainError>>
   logout(refreshToken: string): Promise<void>
   getMe(accessToken: string): Promise<Result<ClientUser, AuthDomainError>>
+  refresh(refreshToken: string): Promise<Result<AuthTokens, AuthDomainError>>
 }

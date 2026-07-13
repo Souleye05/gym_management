@@ -109,6 +109,24 @@ export class DefaultClientAuthService implements ClientAuthService {
     return ok({ id: account.id, name: account.name, phone: account.phone })
   }
 
+  async refresh(refreshToken: string): Promise<Result<AuthTokens, AuthDomainError>> {
+    const tokenHash = this.tokenService.hashRefreshToken(refreshToken)
+    const stored = await this.refreshTokenRepository.findValidByHash(tokenHash)
+    if (!stored || !stored.clientAccountId) {
+      return err({ code: 'invalid-refresh-token', message: 'Session expirée.' })
+    }
+
+    const account = await this.clientAccountRepository.findById(stored.clientAccountId)
+    if (!account || !account.isActive) {
+      return err({ code: 'account-inactive', message: 'Compte désactivé.' })
+    }
+
+    const tokens = await this.issueTokens(account.id, {})
+    await this.refreshTokenRepository.revoke(tokenHash)
+
+    return ok(tokens)
+  }
+
   private async issueTokens(clientAccountId: string, context: RequestContext): Promise<AuthTokens> {
     const accessToken = this.tokenService.issueAccessToken({ sub: clientAccountId, kind: 'client' })
     const refreshToken = this.tokenService.issueRefreshToken()
