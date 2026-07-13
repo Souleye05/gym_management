@@ -16,10 +16,14 @@ import { useClientStatus } from '@/components/clients/use-client-status'
 import { SubscriptionConfirmation } from '@/components/subscriptions/subscription-confirmation'
 import { SubscriptionForm } from '@/components/subscriptions/subscription-form'
 import { SubscriptionStatusBadge } from '@/components/subscriptions/subscription-status-badge'
+import { PaymentMethodPicker } from '@/components/sessions/payment-method-picker'
+import { SessionConfirmation } from '@/components/sessions/session-confirmation'
 import { useClients } from '@/components/providers/clients-provider'
+import { useSessions } from '@/components/providers/sessions-provider'
 import { useSubscriptions } from '@/components/providers/subscriptions-provider'
 import { PLANS } from '@/lib/subscriptions/plans'
 import type { PaymentMethod, PlanId, Subscription } from '@/lib/subscriptions/types'
+import type { Session } from '@/lib/sessions/types'
 
 const currency = (value: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value)
@@ -34,10 +38,14 @@ export default function ClientProfilePage() {
   const { getClient, updateClient, deleteClient } = useClients()
   const { getCurrentSubscription, getSubscriptionHistory, createSubscription, renewSubscription, suspendSubscription, reactivateSubscription } =
     useSubscriptions()
+  const { getSessionsForClient, recordSession } = useSessions()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [subscriptionFormOpen, setSubscriptionFormOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<Subscription | null>(null)
+  const [sessionDialogOpen, setSessionDialogOpen] = useState(false)
+  const [sessionPaymentMethod, setSessionPaymentMethod] = useState<PaymentMethod>('cash')
+  const [sessionConfirmation, setSessionConfirmation] = useState<Session | null>(null)
 
   const client = getClient(params.id)
   const clientStatus = useClientStatus(params.id)
@@ -59,6 +67,7 @@ export default function ClientProfilePage() {
 
   const currentSubscription = getCurrentSubscription(client.id)
   const history = getSubscriptionHistory(client.id)
+  const sessionHistory = getSessionsForClient(client.id)
 
   const handleUpdate = (values: { name: string; phone: string; email?: string }) => {
     updateClient(client.id, values)
@@ -84,6 +93,17 @@ export default function ClientProfilePage() {
 
   const handleReactivate = () => {
     if (currentSubscription) reactivateSubscription(currentSubscription.id)
+  }
+
+  const handleRecordSession = () => {
+    setSessionPaymentMethod('cash')
+    setSessionDialogOpen(true)
+  }
+
+  const handleConfirmSession = () => {
+    const created = recordSession({ clientId: client.id, paymentMethod: sessionPaymentMethod })
+    setSessionDialogOpen(false)
+    setSessionConfirmation(created)
   }
 
   return (
@@ -120,18 +140,31 @@ export default function ClientProfilePage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <CalendarClock className="size-4" />
               Historique des séances
             </CardTitle>
+            <Button size="sm" variant="outline" onClick={handleRecordSession}>
+              Enregistrer une séance
+            </Button>
           </CardHeader>
           <CardContent>
-            <EmptyState
-              icon={CalendarClock}
-              title="Bientôt disponible"
-              description="L'historique des séances sera disponible avec la gestion des séances."
-            />
+            {sessionHistory.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">Aucune séance enregistrée.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {sessionHistory.map((session) => (
+                  <li key={session.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {new Date(session.checkedInAt).toLocaleDateString('fr-FR')}{' '}
+                      {new Date(session.checkedInAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <span>{currency(session.amountPaid)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
 
@@ -246,6 +279,37 @@ export default function ClientProfilePage() {
             paymentMethod={confirmation.paymentMethod}
             startDate={confirmation.startDate}
             endDate={confirmation.endDate}
+          />
+        )}
+      </Dialog>
+
+      <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
+        <DialogHeader>
+          <DialogTitle>Enregistrer une séance</DialogTitle>
+          <DialogDescription>Choisissez le mode de paiement pour {client.name}.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <PaymentMethodPicker value={sessionPaymentMethod} onChange={setSessionPaymentMethod} />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => setSessionDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button type="button" className="bg-gradient-brand text-primary-foreground" onClick={handleConfirmSession}>
+              Confirmer
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog open={sessionConfirmation !== null} onOpenChange={(open) => !open && setSessionConfirmation(null)}>
+        <DialogHeader>
+          <DialogTitle>Séance enregistrée</DialogTitle>
+        </DialogHeader>
+        {sessionConfirmation && (
+          <SessionConfirmation
+            amountPaid={sessionConfirmation.amountPaid}
+            paymentMethod={sessionConfirmation.paymentMethod}
+            checkedInAt={sessionConfirmation.checkedInAt}
           />
         )}
       </Dialog>
