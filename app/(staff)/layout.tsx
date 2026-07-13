@@ -4,6 +4,7 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, type ReactNode } from 'react'
 import { AppShell } from '@/components/shell/app-shell'
+import { ClientsProvider } from '@/components/providers/clients-provider'
 import { useAuth } from '@/components/providers/user-provider'
 
 function StaffGuard({ children }: { children: ReactNode }) {
@@ -32,7 +33,11 @@ function StaffGuard({ children }: { children: ReactNode }) {
     return null
   }
 
-  return <AppShell>{children}</AppShell>
+  return (
+    <ClientsProvider>
+      <AppShell>{children}</AppShell>
+    </ClientsProvider>
+  )
 }
 
 export default function StaffLayout({ children }: { children: ReactNode }) {
