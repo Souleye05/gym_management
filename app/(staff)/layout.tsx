@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useEffect, type ReactNode } from 'react'
 import { AppShell } from '@/components/shell/app-shell'
 import { ClientsProvider } from '@/components/providers/clients-provider'
+import { SettingsProvider } from '@/components/providers/settings-provider'
+import { SessionsProvider } from '@/components/providers/sessions-provider'
 import { SubscriptionsProvider } from '@/components/providers/subscriptions-provider'
 import { useAuth } from '@/components/providers/user-provider'
 
@@ -37,7 +39,11 @@ function StaffGuard({ children }: { children: ReactNode }) {
   return (
     <ClientsProvider>
       <SubscriptionsProvider>
-        <AppShell>{children}</AppShell>
+        <SettingsProvider>
+          <SessionsProvider>
+            <AppShell>{children}</AppShell>
+          </SessionsProvider>
+        </SettingsProvider>
       </SubscriptionsProvider>
     </ClientsProvider>
   )
