@@ -102,8 +102,8 @@ export class DefaultStaffAuthService implements StaffAuthService {
       return err({ code: 'account-inactive', message: 'Compte désactivé.' })
     }
 
-    await this.refreshTokenRepository.revoke(tokenHash)
     const tokens = await this.issueTokens(account.id, account.role, {})
+    await this.refreshTokenRepository.revoke(tokenHash)
 
     return ok(tokens)
   }

@@ -272,6 +272,39 @@ describe('DefaultStaffAuthService.refresh', () => {
     expect(refreshTokens.created).toHaveLength(1)
   })
 
+  it('does not revoke the old token if issuing the new one fails', async () => {
+    const validStored: RefreshTokenRecord = {
+      id: 'rt1',
+      tokenHash: 'hashed-refresh-raw-token',
+      staffAccountId: 's1',
+      clientAccountId: null,
+      expiresAt: new Date(Date.now() + 1000),
+      revokedAt: null,
+    }
+    const revoked: string[] = []
+    const failingRefreshTokens: RefreshTokenRepository = {
+      create: async () => {
+        throw new Error('transient database error')
+      },
+      findValidByHash: async () => validStored,
+      revoke: async (tokenHash) => {
+        revoked.push(tokenHash)
+      },
+    }
+    const service = new DefaultStaffAuthService(
+      fakeStaffAccountRepository(),
+      failingRefreshTokens,
+      fakeLoginAttemptRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakePasswordService(true),
+      fakeTokenService(),
+      allowingRateLimit(),
+    )
+
+    await expect(service.refresh('refresh-raw-token')).rejects.toThrow('transient database error')
+    expect(revoked).toHaveLength(0)
+  })
+
   it('rejects an unknown or expired refresh token', async () => {
     const service = new DefaultStaffAuthService(
       fakeStaffAccountRepository(),
