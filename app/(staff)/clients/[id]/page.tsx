@@ -38,7 +38,7 @@ export default function ClientProfilePage() {
   const { getClient, updateClient, deleteClient } = useClients()
   const { getCurrentSubscription, getSubscriptionHistory, createSubscription, renewSubscription, suspendSubscription, reactivateSubscription } =
     useSubscriptions()
-  const { getSessionsForClient, recordSession } = useSessions()
+  const { getSessionsForClient, recordSubscriberSession } = useSessions()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [subscriptionFormOpen, setSubscriptionFormOpen] = useState(false)
@@ -101,7 +101,7 @@ export default function ClientProfilePage() {
   }
 
   const handleConfirmSession = () => {
-    const created = recordSession({ clientId: client.id, paymentMethod: sessionPaymentMethod })
+    const created = recordSubscriberSession({ clientId: client.id, paymentMethod: sessionPaymentMethod })
     setSessionDialogOpen(false)
     setSessionConfirmation(created)
   }
@@ -306,11 +306,7 @@ export default function ClientProfilePage() {
           <DialogTitle>Séance enregistrée</DialogTitle>
         </DialogHeader>
         {sessionConfirmation && (
-          <SessionConfirmation
-            amountPaid={sessionConfirmation.amountPaid}
-            paymentMethod={sessionConfirmation.paymentMethod}
-            checkedInAt={sessionConfirmation.checkedInAt}
-          />
+          <SessionConfirmation session={sessionConfirmation} clientName={client.name} />
         )}
       </Dialog>
     </div>
