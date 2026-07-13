@@ -10,16 +10,65 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ClientForm } from '@/components/clients/client-form'
 import { ClientStatusBadge } from '@/components/clients/client-status-badge'
+import { useClientStatus } from '@/components/clients/use-client-status'
 import { useClients } from '@/components/providers/clients-provider'
-import type { ClientStatus } from '@/lib/clients/types'
+import type { Client, ClientStatus } from '@/lib/clients/types'
 
 const STATUS_FILTERS: { value: ClientStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'Tous' },
   { value: 'active', label: 'Actif' },
   { value: 'expiring', label: 'Expire bientôt' },
   { value: 'expired', label: 'Expiré' },
+  { value: 'suspended', label: 'Suspendu' },
   { value: 'none', label: 'Aucun abonnement' },
 ]
+
+function useFilteredClients(clients: Client[], query: string, statusFilter: ClientStatus | 'all') {
+  // Status filtering must happen per-row via useClientStatus (a hook, so it cannot be called
+  // inside a plain .filter() callback). This page therefore filters by name/phone only here,
+  // and applies the status filter as a second pass using a non-hook status lookup helper is not
+  // possible without hooks — instead, status filtering renders all query-matched rows and hides
+  // non-matching ones via a wrapper component. See StatusFilteredRow below.
+  return useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    if (normalizedQuery.length === 0) return clients
+    return clients.filter(
+      (client) =>
+        client.name.toLowerCase().includes(normalizedQuery) ||
+        client.phone.toLowerCase().includes(normalizedQuery),
+    )
+  }, [clients, query])
+}
+
+function StatusFilteredRow({
+  client,
+  statusFilter,
+  onClick,
+}: {
+  client: Client
+  statusFilter: ClientStatus | 'all'
+  onClick: () => void
+}) {
+  const status = useClientStatus(client.id)
+  if (statusFilter !== 'all' && status !== statusFilter) return null
+  return (
+    <TableRow onClick={onClick}>
+      <TableCell>
+        <div className="flex items-center gap-3">
+          <Avatar name={client.name} />
+          <span className="font-medium">{client.name}</span>
+        </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground">{client.phone}</TableCell>
+      <TableCell>
+        <ClientStatusBadge status={status} />
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {new Date(client.joinedAt).toLocaleDateString('fr-FR')}
+      </TableCell>
+    </TableRow>
+  )
+}
 
 export default function ClientsPage() {
   const router = useRouter()
@@ -28,17 +77,7 @@ export default function ClientsPage() {
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all')
   const [createOpen, setCreateOpen] = useState(false)
 
-  const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    return clients.filter((client) => {
-      const matchesQuery =
-        normalizedQuery.length === 0 ||
-        client.name.toLowerCase().includes(normalizedQuery) ||
-        client.phone.toLowerCase().includes(normalizedQuery)
-      const matchesStatus = statusFilter === 'all' || client.status === statusFilter
-      return matchesQuery && matchesStatus
-    })
-  }, [clients, query, statusFilter])
+  const queryFiltered = useFilteredClients(clients, query, statusFilter)
 
   const handleCreate = (values: { name: string; phone: string; email?: string }) => {
     addClient(values)
@@ -91,7 +130,7 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {queryFiltered.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           Aucun client trouvé.
         </p>
@@ -106,22 +145,13 @@ export default function ClientsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((client) => (
-              <TableRow key={client.id} onClick={() => router.push(`/clients/${client.id}`)}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar name={client.name} />
-                    <span className="font-medium">{client.name}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{client.phone}</TableCell>
-                <TableCell>
-                  <ClientStatusBadge status={client.status} />
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {new Date(client.joinedAt).toLocaleDateString('fr-FR')}
-                </TableCell>
-              </TableRow>
+            {queryFiltered.map((client) => (
+              <StatusFilteredRow
+                key={client.id}
+                client={client}
+                statusFilter={statusFilter}
+                onClick={() => router.push(`/clients/${client.id}`)}
+              />
             ))}
           </TableBody>
         </Table>

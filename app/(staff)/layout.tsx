@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, type ReactNode } from 'react'
 import { AppShell } from '@/components/shell/app-shell'
 import { ClientsProvider } from '@/components/providers/clients-provider'
+import { SubscriptionsProvider } from '@/components/providers/subscriptions-provider'
 import { useAuth } from '@/components/providers/user-provider'
 
 function StaffGuard({ children }: { children: ReactNode }) {
@@ -35,7 +36,9 @@ function StaffGuard({ children }: { children: ReactNode }) {
 
   return (
     <ClientsProvider>
-      <AppShell>{children}</AppShell>
+      <SubscriptionsProvider>
+        <AppShell>{children}</AppShell>
+      </SubscriptionsProvider>
     </ClientsProvider>
   )
 }
