@@ -18,6 +18,7 @@
     "argon2": "^0.44.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.16.0",
     "motion": "^12.42.2",
     "next": "16.2.6",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
