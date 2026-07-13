@@ -3,7 +3,7 @@ import type { RequestContext } from '../../shared/request-context'
 import type { RequestOtpDto, VerifyOtpDto } from '../dto/client-otp.dto'
 import type { AuthDomainError } from '../domain/errors'
 import type { ClientUser } from '../domain/entities'
-import { CLIENT_REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
+import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { AuthTokens } from '../domain/tokens'
 import type { ClientAccountRepository } from '../repositories/client-account.repository'
 import type { RefreshTokenRepository } from '../repositories/refresh-token.repository'
@@ -13,7 +13,7 @@ import type { OtpService } from './otp.service'
 import type { TokenService } from './token.service'
 import type { ClientAuthService } from './client-auth.service'
 
-const REFRESH_TOKEN_DURATION_MS = CLIENT_REFRESH_TOKEN_TTL_SECONDS * 1000
+const REFRESH_TOKEN_DURATION_MS = REFRESH_TOKEN_TTL_SECONDS * 1000
 const OTP_DURATION_MS = 10 * 60 * 1000
 const MAX_OTP_ATTEMPTS = 5
 

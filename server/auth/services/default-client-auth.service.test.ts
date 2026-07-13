@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ok, err } from '../../shared/result'
 import type { ClientAccountRecord, ClientAccountRepository } from '../repositories/client-account.repository'
-import type { RefreshTokenRecord, RefreshTokenRepository } from '../repositories/refresh-token.repository'
+import type {
+  CreateRefreshTokenInput,
+  RefreshTokenRecord,
+  RefreshTokenRepository,
+} from '../repositories/refresh-token.repository'
+import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { OtpRecord, OtpRepository } from '../repositories/otp.repository'
 import type { LoginLogRepository, RecordLoginLogInput } from '../repositories/login-log.repository'
 import type { OtpService } from './otp.service'
@@ -27,7 +32,7 @@ function fakeClientAccountRepository(account: ClientAccountRecord | null = ACCOU
 }
 
 function fakeRefreshTokenRepository(existing: RefreshTokenRecord | null = null) {
-  const created: unknown[] = []
+  const created: CreateRefreshTokenInput[] = []
   const revoked: string[] = []
   const repository: RefreshTokenRepository = {
     create: async (input) => {
@@ -167,6 +172,8 @@ describe('DefaultClientAuthService.verifyOtp', () => {
     }
     expect(otp.consumed).toEqual(['otp1'])
     expect(refreshTokens.created).toHaveLength(1)
+    const expectedExpiry = Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000
+    expect(refreshTokens.created[0].expiresAt.getTime()).toBeCloseTo(expectedExpiry, -3)
     expect(loginLogs.records[0].succeeded).toBe(true)
   })
 

@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ok, err } from '../../shared/result'
 import type { StaffAccountRecord, StaffAccountRepository } from '../repositories/staff-account.repository'
-import type { RefreshTokenRecord, RefreshTokenRepository } from '../repositories/refresh-token.repository'
+import type {
+  CreateRefreshTokenInput,
+  RefreshTokenRecord,
+  RefreshTokenRepository,
+} from '../repositories/refresh-token.repository'
+import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { LoginAttemptRepository, RecordLoginAttemptInput } from '../repositories/login-attempt.repository'
 import type { LoginLogRepository, RecordLoginLogInput } from '../repositories/login-log.repository'
 import type { PasswordService } from './password.service'
@@ -26,7 +31,7 @@ function fakeStaffAccountRepository(account: StaffAccountRecord | null = ACCOUNT
 }
 
 function fakeRefreshTokenRepository(existing: RefreshTokenRecord | null = null) {
-  const created: unknown[] = []
+  const created: CreateRefreshTokenInput[] = []
   const revoked: string[] = []
   const repository: RefreshTokenRepository = {
     create: async (input) => {
@@ -117,6 +122,8 @@ describe('DefaultStaffAuthService.login', () => {
     expect(loginLogs.records).toHaveLength(1)
     expect(loginLogs.records[0].succeeded).toBe(true)
     expect(refreshTokens.created).toHaveLength(1)
+    const expectedExpiry = Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000
+    expect(refreshTokens.created[0].expiresAt.getTime()).toBeCloseTo(expectedExpiry, -3)
   })
 
   it('rejects when the account does not exist, without revealing that', async () => {

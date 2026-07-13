@@ -3,7 +3,7 @@ import type { RequestContext } from '../../shared/request-context'
 import type { StaffLoginDto } from '../dto/staff-login.dto'
 import type { AuthDomainError } from '../domain/errors'
 import type { StaffUser } from '../domain/entities'
-import { STAFF_REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
+import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { AuthTokens } from '../domain/tokens'
 import type { StaffAccountRepository } from '../repositories/staff-account.repository'
 import type { RefreshTokenRepository } from '../repositories/refresh-token.repository'
@@ -14,7 +14,7 @@ import type { TokenService } from './token.service'
 import type { RateLimitService } from './rate-limit.service'
 import type { StaffAuthService } from './staff-auth.service'
 
-const REFRESH_TOKEN_DURATION_MS = STAFF_REFRESH_TOKEN_TTL_SECONDS * 1000
+const REFRESH_TOKEN_DURATION_MS = REFRESH_TOKEN_TTL_SECONDS * 1000
 
 const INVALID_CREDENTIALS: AuthDomainError = {
   code: 'invalid-credentials',
