@@ -44,6 +44,10 @@ export type Plan = {
 
 export type SubscriptionStatus = 'active' | 'expiring' | 'expired' | 'suspended'
 
+// lib/clients/types.ts — ClientStatus étendu pour inclure 'suspended' (voir section
+// "Statut client dérivé" plus bas) : un modèle cohérent plutôt qu'un cas spécial.
+// export type ClientStatus = 'active' | 'expiring' | 'expired' | 'suspended' | 'none'
+
 export type PaymentMethod = 'cash' | 'card' | 'mobile_money'
 
 export type Subscription = {
@@ -86,9 +90,13 @@ export function computeSubscriptionStatus(subscription: Subscription, now: Date 
 }
 ```
 
-`Client.status` (le champ `ClientStatus` existant : `'active' | 'expiring' | 'expired' | 'none'`) devient calculé ainsi :
+### `ClientStatus` étendu à `'suspended'`
+
+`ClientStatus` (`lib/clients/types.ts`) gagne la valeur `'suspended'` : `'active' | 'expiring' | 'expired' | 'suspended' | 'none'`. Un `Subscription.status === 'suspended'` se reflète donc directement en `Client.status === 'suspended'`, sans mapping ni cas spécial — un seul modèle de statut cohérent entre `Subscription` et `Client`, pas de traitement dérogatoire. `ClientStatusBadge` (`components/clients/client-status-badge.tsx`) gagne une entrée `suspended` dans sa table `STATUS_CONFIG` (label "Suspendu", variant `warning` ou `muted` — à trancher visuellement dans le plan, pas structurant).
+
+`Client.status` devient calculé ainsi :
 - Si le client n'a **aucun** abonnement → `'none'`.
-- Sinon → le statut de son abonnement **le plus récent** (par `createdAt` décroissant), avec `'suspended'` mappé sur... **point à trancher dans le plan** : soit on étend `ClientStatus` pour inclure `'suspended'` (rupture mineure de l'API existante `ClientStatusBadge`), soit `Client.status` affiche `'active'` pour un abonnement suspendu avec un badge distinct ailleurs. Le plan d'implémentation choisira l'option la plus propre en regardant le code exact de `ClientStatusBadge`/`ClientsProvider` — les deux sont des changements mineurs et localisés, pas structurants pour ce design.
+- Sinon → le statut de son **abonnement courant** (voir "Un seul abonnement courant par client" ci-dessous — déterminé par ses dates métier, pas par `createdAt`), calculé via `computeSubscriptionStatus`.
 
 ## Retrait de `Client.status` du modèle stocké
 
@@ -110,10 +118,27 @@ type SubscriptionsContextValue = {
 }
 ```
 
-- `createSubscription`/`renewSubscription` : mêmes règles métier (les deux créent un nouvel enregistrement ; `renewSubscription` est sémantiquement distincte pour l'UI — bouton "Renouveler" vs "Créer un abonnement" — mais peut partager l'essentiel de son implémentation). `startDate` = maintenant, `endDate` = `startDate + plan.durationDays`. `amountPaid` = `plan.price` au moment de la création.
-- **Un seul abonnement "courant" par client** : `getCurrentSubscription(clientId)` renvoie celui avec le `createdAt` le plus récent parmi tous les abonnements de ce client (pas de notion de "clôturer l'ancien" — l'historique reste immuable, on regarde juste lequel est le plus récent).
-- `suspendSubscription`/`reactivateSubscription` : bascule `suspended` sur l'abonnement courant uniquement (pas de sens de suspendre un abonnement expiré ou passé).
-- `getSubscriptionHistory(clientId)` : tous les abonnements du client, triés par `createdAt` décroissant, pour l'affichage de l'historique sur la fiche client.
+### Un seul abonnement courant par client — déterminé par les dates métier, pas `createdAt`
+
+`getCurrentSubscription(clientId)` renvoie l'abonnement du client avec l'**`endDate` la plus tardive** parmi tous ses abonnements (pas `createdAt`). `createdAt` reste utile pour l'ordre d'affichage de l'historique (voir `getSubscriptionHistory` plus bas) mais ne doit **jamais** servir à déterminer quel abonnement est "courant" — deux abonnements créés le même jour civil, ou un renouvellement anticipé créé avant l'expiration du précédent, pourraient sinon se classer dans le mauvais ordre. `endDate` est la seule source de vérité métier pour "lequel est actif maintenant".
+
+### Création et renouvellement — préserver les jours restants
+
+```typescript
+function computeStartDate(currentSubscription: Subscription | undefined, now: Date): Date {
+  if (!currentSubscription) return now
+  const currentEnd = new Date(currentSubscription.endDate)
+  return currentEnd.getTime() > now.getTime() ? currentEnd : now
+}
+```
+
+- `createSubscription(clientId, ...)` : utilisé quand le client n'a **aucun** abonnement (`getCurrentSubscription` renvoie `undefined`) — `startDate = now`.
+- `renewSubscription(clientId, ...)` : utilisé quand le client a déjà un abonnement (courant ou passé). `startDate = computeStartDate(getCurrentSubscription(clientId), now)` :
+  - Si l'abonnement courant est encore `active`/`expiring` (son `endDate` est dans le futur) → `startDate` = son `endDate` exact. Le client ne perd **aucun jour restant** : le nouvel abonnement s'enchaîne immédiatement après l'ancien.
+  - Si l'abonnement courant est `expired` (son `endDate` est dans le passé) → `startDate = now`. Repartir de l'ancienne date créerait un abonnement "renouvelé" déjà expiré le jour même, ce qui n'a pas de sens.
+- Dans les deux cas : `endDate = startDate + plan.durationDays`, `amountPaid = plan.price` au moment de la création, un nouvel enregistrement est toujours créé (jamais de modification de l'ancien).
+- `suspendSubscription`/`reactivateSubscription` : bascule `suspended` sur l'abonnement courant (au sens `endDate` la plus tardive) uniquement — pas de sens de suspendre un abonnement déjà dépassé par un plus récent.
+- `getSubscriptionHistory(clientId)` : tous les abonnements du client, triés par `createdAt` décroissant (ordre chronologique de création — approprié ici puisqu'il s'agit d'un simple historique d'affichage, pas d'une détermination de "lequel est actif").
 
 Mock de départ (`lib/subscriptions/mock-subscriptions.ts`) : génère un abonnement pour la majorité des 18 clients mockés existants (statuts variés obtenus en choisissant des `endDate` passées/proches/lointaines), et laisse 2-3 clients sans aucun abonnement (`status: 'none'`) pour couvrir ce cas — cohérent avec les statuts déjà visibles aujourd'hui dans `mock-clients.ts` avant leur retrait.
 
@@ -152,8 +177,8 @@ Après création/renouvellement réussi : `Dialog` ou état inline récapitulant
 
 - Client sans abonnement visitant sa fiche → section abonnement affiche l'état "Aucun abonnement" avec le bouton de création, pas une erreur.
 - Tentative de suspendre un abonnement déjà expiré → action non disponible (bouton absent pour ce statut), pas un cas d'erreur à gérer côté logique.
-- Tentative de renouveler un abonnement suspendu → à clarifier dans le plan : soit interdit (il faut réactiver avant de renouveler), soit autorisé (renouveler crée un nouvel abonnement actif, l'ancien suspendu reste dans l'historique tel quel). Le plan tranchera en fonction de ce qui est le plus simple à implémenter sans ambiguïté UX.
-- Deux renouvellements rapides du même client (double-clic) → chaque clic crée un enregistrement distinct avec son propre `createdAt` ; pas de garde anti-double-soumission dans ce sous-projet (cohérent avec le niveau de rigueur du reste du CRUD mocké).
+- Renouveler un abonnement suspendu → autorisé, cohérent avec `computeStartDate` : si sa `endDate` est encore future, le nouvel abonnement démarre à cette `endDate` (le client ne perd pas les jours restants de la période suspendue) ; l'ancien enregistrement suspendu reste tel quel dans l'historique. Pas besoin de réactiver avant de renouveler.
+- Deux renouvellements rapides du même client (double-clic) → chaque clic crée un enregistrement distinct avec son propre `createdAt` ; pas de garde anti-double-soumission dans ce sous-projet (cohérent avec le niveau de rigueur du reste du CRUD mocké). Note : comme `getCurrentSubscription` se base sur `endDate` et non `createdAt`, un double-clic produirait deux abonnements avec la même `startDate`/`endDate` calculée (tous deux dérivés du même abonnement précédent) — un cas limite mineur, sans garde dans ce sous-projet.
 
 ## Découpage global du projet (rappel, pour contexte)
 
