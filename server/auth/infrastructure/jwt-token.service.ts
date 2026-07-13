@@ -2,10 +2,10 @@ import { randomBytes, createHash } from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import { err, ok, type Result } from '../../shared/result'
 import type { AuthDomainError } from '../domain/errors'
+import { ACCESS_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { AccessTokenPayload } from '../domain/tokens'
 import type { TokenService } from '../services/token.service'
 
-const ACCESS_TOKEN_TTL_SECONDS = 15 * 60
 const REFRESH_TOKEN_BYTE_LENGTH = 32
 
 export class JwtTokenService implements TokenService {

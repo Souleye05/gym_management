@@ -3,6 +3,7 @@ import type { RequestContext } from '../../shared/request-context'
 import type { StaffLoginDto } from '../dto/staff-login.dto'
 import type { AuthDomainError } from '../domain/errors'
 import type { StaffUser } from '../domain/entities'
+import { STAFF_REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { AuthTokens } from '../domain/tokens'
 import type { StaffAccountRepository } from '../repositories/staff-account.repository'
 import type { RefreshTokenRepository } from '../repositories/refresh-token.repository'
@@ -13,7 +14,7 @@ import type { TokenService } from './token.service'
 import type { RateLimitService } from './rate-limit.service'
 import type { StaffAuthService } from './staff-auth.service'
 
-const REFRESH_TOKEN_DURATION_MS = 30 * 24 * 60 * 60 * 1000
+const REFRESH_TOKEN_DURATION_MS = STAFF_REFRESH_TOKEN_TTL_SECONDS * 1000
 
 const INVALID_CREDENTIALS: AuthDomainError = {
   code: 'invalid-credentials',
@@ -50,19 +51,21 @@ export class DefaultStaffAuthService implements StaffAuthService {
       return err(INVALID_CREDENTIALS)
     }
 
-    await this.loginAttemptRepository.record({
-      identifier: input.email,
-      succeeded: true,
-      staffAccountId: account.id,
-      ipAddress: context.ipAddress,
-    })
-    await this.loginLogRepository.record({
-      kind: 'staff',
-      succeeded: true,
-      staffAccountId: account.id,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
-    })
+    await Promise.all([
+      this.loginAttemptRepository.record({
+        identifier: input.email,
+        succeeded: true,
+        staffAccountId: account.id,
+        ipAddress: context.ipAddress,
+      }),
+      this.loginLogRepository.record({
+        kind: 'staff',
+        succeeded: true,
+        staffAccountId: account.id,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      }),
+    ])
 
     const user: StaffUser = { id: account.id, name: account.name, email: account.email, role: account.role }
     const tokens = await this.issueTokens(account.id, user.role, context)
@@ -109,20 +112,22 @@ export class DefaultStaffAuthService implements StaffAuthService {
   }
 
   private async recordFailure(email: string, context: RequestContext, staffAccountId?: string): Promise<void> {
-    await this.loginAttemptRepository.record({
-      identifier: email,
-      succeeded: false,
-      staffAccountId,
-      ipAddress: context.ipAddress,
-    })
-    await this.loginLogRepository.record({
-      kind: 'staff',
-      succeeded: false,
-      staffAccountId,
-      reason: INVALID_CREDENTIALS.code,
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
-    })
+    await Promise.all([
+      this.loginAttemptRepository.record({
+        identifier: email,
+        succeeded: false,
+        staffAccountId,
+        ipAddress: context.ipAddress,
+      }),
+      this.loginLogRepository.record({
+        kind: 'staff',
+        succeeded: false,
+        staffAccountId,
+        reason: INVALID_CREDENTIALS.code,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      }),
+    ])
   }
 
   private async issueTokens(
