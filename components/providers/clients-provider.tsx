@@ -35,7 +35,6 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
       phone: input.phone,
       email: input.email,
       cardNumber: `CARD-${String(sequenceRef.current).padStart(5, '0')}`,
-      status: 'none',
       joinedAt: new Date().toISOString(),
     }
     setClients((prev) => [...prev, newClient])
