@@ -297,6 +297,7 @@ describe('DefaultClientAuthService.getMe', () => {
     const result = await service.getMe('access-staff-token')
 
     expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('session-expired')
   })
 })
 

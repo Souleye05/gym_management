@@ -232,6 +232,7 @@ describe('DefaultStaffAuthService.getMe', () => {
     const result = await service.getMe('access-client-token')
 
     expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('session-expired')
   })
 
   it('rejects an invalid access token', async () => {

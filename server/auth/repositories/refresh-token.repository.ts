@@ -1,6 +1,6 @@
 import type { LoginKind } from '../domain/enums'
 
-export type RefreshTokenOwnerKind = Extract<LoginKind, 'staff' | 'client'>
+export type RefreshTokenOwnerKind = LoginKind
 
 export type RefreshTokenRecord = {
   id: string
