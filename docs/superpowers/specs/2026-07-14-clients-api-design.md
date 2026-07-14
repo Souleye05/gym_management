@@ -45,7 +45,7 @@ model Client {
 
   clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id], onDelete: SetNull)
 
-  @@index([phone])
+  @@index([phone, isActive])
   @@map("clients")
 }
 ```
@@ -54,8 +54,8 @@ Décisions et justifications :
 
 - **`clientAccountId` optionnel** : un `Client` peut exister sans jamais avoir de compte de connexion (créé au comptoir), et un `ClientAccount` peut être rattaché plus tard. `onDelete: SetNull` — si le compte d'authentification est un jour supprimé, la fiche client métier reste intacte.
 - **`cardSequence` (entier, pas la string formatée)** : Postgres gère l'incrémentation de façon atomique via sa propre séquence (`@default(autoincrement())` sur un champ non-clé-primaire crée une séquence dédiée). Le format `"CARD-00001"` n'est **jamais stocké** — il est dérivé à la lecture via un helper partagé `formatCardNumber(sequence: number): string`, utilisé partout où un numéro de carte est exposé (API, QR code, UI future). Le frontend ne connaît que `cardNumber: string`, jamais `cardSequence`.
-- **`phone` sans `@unique` en base** : voir section dédiée ci-dessous.
-- **Soft delete (`isActive`/`deletedAt`)**, cohérent avec `StaffAccount`/`ClientAccount` — un hard delete casserait l'intégrité référentielle dès que Abonnements/Séances existeront réellement (FK vers `Client.id`).
+- **`phone` sans `@unique` en base** : voir section dédiée ci-dessous. Index composite `@@index([phone, isActive])` plutôt que `@@index([phone])` seul, pour que `findByPhone(phone, { activeOnly: true })` (le chemin le plus fréquent : vérification d'unicité à chaque création/modification, et recherche à l'accueil) reste indexé même quand la table grossit.
+- **Soft delete (`isActive`/`deletedAt`)**, cohérent avec `StaffAccount`/`ClientAccount` — un hard delete casserait l'intégrité référentielle dès que Abonnements/Séances existeront réellement (FK vers `Client.id`). **`isActive` est l'unique source de vérité** pour "client désactivé" : c'est le seul champ que toute query (recherche, liste, `findByPhone`, unicité) doit filtrer (`isActive: true`). `deletedAt` n'est qu'un horodatage d'audit (quand la désactivation a eu lieu) — jamais utilisé comme condition de filtrage (`deletedAt IS NULL`) dans aucune requête, pour éviter d'avoir deux sources de vérité divergentes.
 
 ### Unicité du téléphone : règle métier, pas contrainte de base
 
@@ -76,7 +76,7 @@ server/clients/
     client.repository.ts      — interface : create, findById, findByPhone, findByCardSequence, search, update, deactivate
   infrastructure/
     prisma-client.repository.ts
-    format-card-number.ts     — formatCardNumber(sequence: number): string — seul endroit qui connaît le format "CARD-xxxxx"
+    format-card-number.ts     — formatCardNumber(sequence: number): string / parseCardNumber(cardNumber: string): number | null — seul endroit qui connaît le format "CARD-xxxxx", dans les deux sens
   services/
     client.service.ts             — interface ClientService
     default-client.service.ts     — validation métier, traduit toute erreur Prisma en ClientDomainError, ne laisse jamais une exception brute atteindre le Controller
@@ -101,7 +101,7 @@ GET /api/clients?q=&phone=&cardNumber=&status=
 ```
 
 Un seul endpoint, extensible par paramètres — pas de multiplication de routes (`/clients/by-phone`, `/clients/by-card`, etc.). Le Controller inspecte les query params reçus et dispatche vers la méthode Service/Repository appropriée :
-- `cardNumber` fourni → `findByCardSequence` (après avoir reparsé `"CARD-00001"` → `1`)
+- `cardNumber` fourni → `parseCardNumber(cardNumber)` (depuis `format-card-number.ts`, jamais un `parseInt`/regex ad hoc dans le Controller) puis `findByCardSequence` ; `parseCardNumber` retournant `null` (format invalide) → traité comme "aucun résultat", pas une erreur 400 (une recherche par numéro de carte mal formé doit juste ne rien trouver)
 - `phone` fourni (sans `q`) → `findByPhone`
 - `q` fourni → `search(q)` (substring insensible à la casse sur nom et téléphone, même sémantique que `createInMemoryClientRepository.search` actuel)
 - aucun param → liste complète des clients actifs
@@ -119,7 +119,7 @@ Ces méthodes spécialisées (`findByPhone`, `findByCardSequence`, `findById`, `
 | `getClient`/`updateClient`/`deactivateClient` sur un id inexistant ou déjà désactivé | `not-found` | 404 |
 | `createClient`/`updateClient` avec un téléphone déjà utilisé par un client actif | `phone-already-used` | 409 |
 | Payload invalide (Zod) | `validation-error` | 400 — géré au Controller, avant d'atteindre le Service |
-| Exception Prisma imprévue (connexion, contrainte inattendue) | — catchée, relancée en erreur générique loggée | 500 |
+| Exception Prisma imprévue (connexion, contrainte inattendue) | — catchée, loggée en détail côté serveur | 500, réponse `{ error: 'internal-error' }` uniquement — le message Prisma brut (détails de schéma/contrainte) ne doit jamais atteindre la réponse HTTP |
 
 ## Contrat API — zéro breaking change
 
