@@ -1,91 +1,99 @@
 // lib/auth/auth-service.ts
+import { httpClient } from '@/lib/api/http-client'
 import { err, ok, type Result } from './result'
-import { ROLE_PERMISSIONS } from './permissions'
 import type { AuthError, ClientSession, Session, StaffCredentials, StaffSession } from './types'
-import { findStaffAccount } from './mock-staff-directory'
-import { findClientAccount } from './mock-client-directory'
-import type { SessionRepository } from './session-repository'
+import type { Role } from './permissions'
+import { ROLE_PERMISSIONS } from './permissions'
 
-const STAFF_SESSION_DURATION_MS = 30 * 60 * 1000
-const CLIENT_SESSION_DURATION_MS = 24 * 60 * 60 * 1000
-const MOCK_OTP_CODE = '123456'
+type BackendRole = 'ADMIN' | 'AGENT'
+
+type StaffUserDto = { id: string; name: string; email: string; role: BackendRole }
+type ClientUserDto = { id: string; name: string; phone: string }
+
+const ROLE_FROM_BACKEND: Record<BackendRole, Role> = { ADMIN: 'admin', AGENT: 'agent' }
+
+function toStaffSession(user: StaffUserDto): StaffSession {
+  const role = ROLE_FROM_BACKEND[user.role]
+  if (!role) {
+    throw new Error(`Rôle staff inconnu reçu du serveur : ${user.role}`)
+  }
+  return {
+    kind: 'staff',
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role,
+    permissions: ROLE_PERMISSIONS[role],
+  }
+}
+
+function toClientSession(user: ClientUserDto): ClientSession {
+  return { kind: 'client', id: user.id, name: user.name, phone: user.phone }
+}
+
+export type RefreshOutcome = 'refreshed' | 'rejected' | 'network-error'
 
 export type AuthService = {
   loginStaff(credentials: StaffCredentials): Promise<Result<StaffSession, AuthError>>
   requestClientOtp(phone: string): Promise<Result<void, AuthError>>
   verifyClientOtp(phone: string, code: string): Promise<Result<ClientSession, AuthError>>
-  logout(): Promise<void>
+  logout(session: Session): Promise<boolean>
   getSession(): Promise<Session | null>
-  refreshSession(): Promise<void>
+  refreshSession(): Promise<RefreshOutcome>
 }
 
-export function createAuthService(repository: SessionRepository): AuthService {
+export function createAuthService(): AuthService {
   return {
     async loginStaff(credentials) {
-      const account = findStaffAccount(credentials.email, credentials.password)
-      if (!account) {
-        return err({ code: 'invalid-credentials', message: 'Identifiants invalides.' })
-      }
-      const session: StaffSession = {
-        kind: 'staff',
-        id: account.id,
-        name: account.name,
-        email: account.email,
-        role: account.role,
-        permissions: ROLE_PERMISSIONS[account.role],
-        expiresAt: Date.now() + STAFF_SESSION_DURATION_MS,
-      }
-      await repository.set(session)
-      return ok(session)
+      const result = await httpClient.post<{ user: StaffUserDto }>('/api/auth/staff/login', credentials)
+      if (!result.ok) return err(result.error)
+      return ok(toStaffSession(result.value.user))
     },
 
     async requestClientOtp(phone) {
-      const account = findClientAccount(phone)
-      if (!account) {
-        return err({ code: 'unknown-account', message: 'Compte introuvable.' })
-      }
+      const result = await httpClient.post<null>('/api/auth/client/request-otp', { phone })
+      if (!result.ok) return err(result.error)
       return ok(undefined)
     },
 
     async verifyClientOtp(phone, code) {
-      const account = findClientAccount(phone)
-      if (!account) {
-        return err({ code: 'unknown-account', message: 'Compte introuvable.' })
-      }
-      if (code !== MOCK_OTP_CODE) {
-        return err({ code: 'invalid-otp', message: 'Code incorrect.' })
-      }
-      const session: ClientSession = {
-        kind: 'client',
-        id: account.id,
-        name: account.name,
-        phone: account.phone,
-        expiresAt: Date.now() + CLIENT_SESSION_DURATION_MS,
-      }
-      await repository.set(session)
-      return ok(session)
+      const result = await httpClient.post<{ user: ClientUserDto }>('/api/auth/client/verify-otp', { phone, code })
+      if (!result.ok) return err(result.error)
+      return ok(toClientSession(result.value.user))
     },
 
-    async logout() {
-      await repository.clear()
+    async logout(session) {
+      const path = session.kind === 'staff' ? '/api/auth/staff/logout' : '/api/auth/client/logout'
+      const result = await httpClient.post<null>(path)
+      return result.ok
     },
 
     async getSession() {
-      const session = await repository.get()
-      if (!session) return null
-      if (session.expiresAt <= Date.now()) {
-        await repository.clear()
-        return null
-      }
-      return session
+      const staffResult = await httpClient.get<{ user: StaffUserDto }>('/api/auth/staff/me')
+      if (staffResult.ok) return toStaffSession(staffResult.value.user)
+
+      const clientResult = await httpClient.get<{ user: ClientUserDto }>('/api/auth/client/me')
+      if (clientResult.ok) return toClientSession(clientResult.value.user)
+
+      // Access token may simply be expired (e.g. middleware let the request through because it
+      // only checks for access_token's presence, not validity). Attempt a silent refresh — backed
+      // by the httpOnly refresh_token cookie, invisible to this code — before giving up.
+      const refreshResult = await httpClient.post<null>('/api/auth/refresh')
+      if (!refreshResult.ok) return null
+
+      const retryStaffResult = await httpClient.get<{ user: StaffUserDto }>('/api/auth/staff/me')
+      if (retryStaffResult.ok) return toStaffSession(retryStaffResult.value.user)
+
+      const retryClientResult = await httpClient.get<{ user: ClientUserDto }>('/api/auth/client/me')
+      if (retryClientResult.ok) return toClientSession(retryClientResult.value.user)
+
+      return null
     },
 
     async refreshSession() {
-      const session = await repository.get()
-      if (!session) return
-      if (session.expiresAt <= Date.now()) return
-      const duration = session.kind === 'staff' ? STAFF_SESSION_DURATION_MS : CLIENT_SESSION_DURATION_MS
-      await repository.set({ ...session, expiresAt: Date.now() + duration })
+      const result = await httpClient.post<null>('/api/auth/refresh')
+      if (result.ok) return 'refreshed'
+      return result.error.status === 0 ? 'network-error' : 'rejected'
     },
   }
 }

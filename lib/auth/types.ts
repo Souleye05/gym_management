@@ -9,7 +9,6 @@ export type StaffSession = {
   email: string
   role: Role
   permissions: Permission[]
-  expiresAt: number
 }
 
 export type ClientSession = {
@@ -17,7 +16,6 @@ export type ClientSession = {
   id: string
   name: string
   phone: string
-  expiresAt: number
 }
 
 export type Session = StaffSession | ClientSession
@@ -27,9 +25,7 @@ export type StaffCredentials = {
   password: string
 }
 
-export type AuthErrorCode = 'invalid-credentials' | 'unknown-account' | 'invalid-otp'
-
 export type AuthError = {
-  code: AuthErrorCode
   message: string
+  status: number
 }

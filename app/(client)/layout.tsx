@@ -34,8 +34,8 @@ function ClientGuard({ children }: { children: ReactNode }) {
   }
 
   const handleLogout = async () => {
-    await logout()
-    router.replace('/connexion')
+    const success = await logout()
+    if (success) router.replace('/connexion')
   }
 
   return (

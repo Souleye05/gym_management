@@ -3,7 +3,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createAuthService } from '@/lib/auth/auth-service'
-import { localStorageSessionRepository } from '@/lib/auth/session-repository'
 import type { AuthError, ClientSession, Session, StaffCredentials, StaffSession } from '@/lib/auth/types'
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
@@ -16,10 +15,12 @@ type AuthContextValue = {
   loginStaff(credentials: StaffCredentials): Promise<AuthError | null>
   requestClientOtp(phone: string): Promise<AuthError | null>
   verifyClientOtp(phone: string, code: string): Promise<AuthError | null>
-  logout(): Promise<void>
+  /** Returns false if the server-side session could not be confirmed as revoked (e.g. offline) —
+   *  callers should surface that the user may still be logged in on the server. */
+  logout(): Promise<boolean>
 }
 
-const authService = createAuthService(localStorageSessionRepository)
+const authService = createAuthService()
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -37,8 +38,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const startRefreshInterval = useCallback(() => {
     stopRefreshInterval()
-    intervalRef.current = setInterval(() => {
-      void authService.refreshSession()
+    intervalRef.current = setInterval(async () => {
+      const outcome = await authService.refreshSession()
+      // A transient network/server error does not mean the session is invalid — only a genuine
+      // rejection (refresh token expired/revoked) should log the user out client-side.
+      if (outcome === 'rejected') {
+        stopRefreshInterval()
+        setSession(null)
+        setStatus('unauthenticated')
+      }
     }, REFRESH_INTERVAL_MS)
   }, [stopRefreshInterval])
 
@@ -80,11 +88,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [startRefreshInterval])
 
   const logout = useCallback(async () => {
+    if (!session) return true
+    const revoked = await authService.logout(session)
+    if (!revoked) return false
     stopRefreshInterval()
-    await authService.logout()
     setSession(null)
     setStatus('unauthenticated')
-  }, [stopRefreshInterval])
+    return true
+  }, [session, stopRefreshInterval])
 
   return (
     <AuthContext.Provider

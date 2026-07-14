@@ -13,8 +13,8 @@ export function Topbar({ onOpenCommand }: { onOpenCommand: () => void }) {
   const { logout } = useAuth()
 
   const handleLogout = async () => {
-    await logout()
-    router.replace('/login')
+    const success = await logout()
+    if (success) router.replace('/login')
   }
 
   return (

@@ -58,7 +58,6 @@ function VerificationForm() {
               placeholder="123456"
             />
           </div>
-          <p className="text-xs text-muted-foreground">Code de démonstration : 123456</p>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
