@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { apiFailureFromDomainError, apiFailureFromZod, apiSuccess } from '../../shared/api-response'
+import { extractRequestContext } from '../../shared/extract-request-context'
 import { statusForDomainError } from '../../shared/http-status'
 import { getContainer } from '../../shared/container'
 import { RequestOtpSchema } from '../dto/client-otp.dto'
@@ -12,7 +13,7 @@ export async function clientRequestOtpController(req: NextRequest): Promise<Next
   }
 
   const { clientAuthService } = getContainer()
-  const result = await clientAuthService.requestOtp(parsed.data)
+  const result = await clientAuthService.requestOtp(parsed.data, extractRequestContext(req))
 
   if (!result.ok) {
     return NextResponse.json(apiFailureFromDomainError(result.error), { status: statusForDomainError(result.error) })

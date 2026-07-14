@@ -6,6 +6,7 @@ function fakeLoginAttemptRepository(recentFailures: number): LoginAttemptReposit
   return {
     record: async () => {},
     countRecentFailures: async () => recentFailures,
+    countRecent: async () => 0,
   }
 }
 

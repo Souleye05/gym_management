@@ -45,4 +45,28 @@ describe('clientRequestOtpController', () => {
 
     expect(res.status).toBe(400)
   })
+
+  it('returns 429 after too many requests for the same phone within the window', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await clientRequestOtpController(postRequest({ phone: '+33612345601' }))
+      expect(res.status).toBe(200)
+    }
+
+    const res = await clientRequestOtpController(postRequest({ phone: '+33612345601' }))
+    const json = await res.json()
+
+    expect(res.status).toBe(429)
+    expect(json.success).toBe(false)
+  })
+
+  it('rate-limits an unknown phone identically to a known one (no enumeration via the rate-limit gate)', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await clientRequestOtpController(postRequest({ phone: '+33699999999' }))
+      expect(res.status).toBe(200)
+    }
+
+    const res = await clientRequestOtpController(postRequest({ phone: '+33699999999' }))
+
+    expect(res.status).toBe(429)
+  })
 })

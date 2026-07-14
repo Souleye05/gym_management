@@ -53,6 +53,7 @@ function fakeLoginAttemptRepository() {
       records.push(input)
     },
     countRecentFailures: async () => 0,
+    countRecent: async () => 0,
   }
   return { repository, records }
 }
@@ -118,7 +119,7 @@ describe('DefaultStaffAuthService.login', () => {
       expect(result.value.tokens.accessToken).toBe('access-s1')
     }
     expect(loginAttempts.records).toEqual([
-      { identifier: 'admin@atlas.fit', succeeded: true, staffAccountId: 's1', ipAddress: undefined },
+      { kind: 'LOGIN', identifier: 'admin@atlas.fit', succeeded: true, staffAccountId: 's1', ipAddress: undefined },
     ])
     expect(loginLogs.records).toHaveLength(1)
     expect(loginLogs.records[0].succeeded).toBe(true)

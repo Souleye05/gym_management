@@ -8,9 +8,11 @@ import type {
 } from '../repositories/refresh-token.repository'
 import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import type { OtpRecord, OtpRepository } from '../repositories/otp.repository'
+import type { LoginAttemptRepository, RecordLoginAttemptInput } from '../repositories/login-attempt.repository'
 import type { LoginLogRepository, RecordLoginLogInput } from '../repositories/login-log.repository'
 import type { OtpService } from './otp.service'
 import type { TokenService } from './token.service'
+import type { RateLimitService } from './rate-limit.service'
 import { DefaultClientAuthService } from './default-client-auth.service'
 
 const ACCOUNT: ClientAccountRecord = { id: 'c1', phone: '+33612345601', name: 'Yasmine Kaddour', isActive: true }
@@ -67,6 +69,18 @@ function fakeOtpRepository(otp: OtpRecord | null = VALID_OTP, consumeSucceeds = 
   return { repository, created, incrementedAttempts, consumed }
 }
 
+function fakeLoginAttemptRepository() {
+  const records: RecordLoginAttemptInput[] = []
+  const repository: LoginAttemptRepository = {
+    record: async (input) => {
+      records.push(input)
+    },
+    countRecentFailures: async () => 0,
+    countRecent: async () => 0,
+  }
+  return { repository, records }
+}
+
 function fakeLoginLogRepository() {
   const records: RecordLoginLogInput[] = []
   const repository: LoginLogRepository = {
@@ -97,19 +111,47 @@ function fakeTokenService(): TokenService {
   }
 }
 
+function allowingRateLimit(): RateLimitService {
+  return { assertNotLocked: async () => ok(undefined) }
+}
+
+function lockedRateLimit(): RateLimitService {
+  return {
+    assertNotLocked: async () =>
+      err({ code: 'too-many-attempts', message: 'Trop de tentatives, réessayez plus tard.' }),
+  }
+}
+
+type Overrides = {
+  clientAccountRepository?: ClientAccountRepository
+  refreshTokenRepository?: RefreshTokenRepository
+  otpRepository?: OtpRepository
+  loginAttemptRepository?: LoginAttemptRepository
+  loginLogRepository?: LoginLogRepository
+  otpService?: OtpService
+  tokenService?: TokenService
+  otpRateLimitService?: RateLimitService
+}
+
+function buildService(overrides: Overrides = {}) {
+  return new DefaultClientAuthService(
+    overrides.clientAccountRepository ?? fakeClientAccountRepository(),
+    overrides.refreshTokenRepository ?? fakeRefreshTokenRepository().repository,
+    overrides.otpRepository ?? fakeOtpRepository().repository,
+    overrides.loginAttemptRepository ?? fakeLoginAttemptRepository().repository,
+    overrides.loginLogRepository ?? fakeLoginLogRepository().repository,
+    overrides.otpService ?? fakeOtpService(true),
+    overrides.tokenService ?? fakeTokenService(),
+    overrides.otpRateLimitService ?? allowingRateLimit(),
+  )
+}
+
 describe('DefaultClientAuthService.requestOtp', () => {
   it('creates an OTP for a known, active account', async () => {
     const otp = fakeOtpRepository(null)
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      otp.repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ otpRepository: otp.repository })
 
-    const result = await service.requestOtp({ phone: '+33612345601' })
+    const result = await service.requestOtp({ phone: '+33612345601' }, {})
 
     expect(result.ok).toBe(true)
     expect(otp.created).toHaveLength(1)
@@ -117,16 +159,9 @@ describe('DefaultClientAuthService.requestOtp', () => {
 
   it('succeeds generically for an unknown phone, without creating an OTP (anti-enumeration)', async () => {
     const otp = fakeOtpRepository(null)
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(null),
-      fakeRefreshTokenRepository().repository,
-      otp.repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ clientAccountRepository: fakeClientAccountRepository(null), otpRepository: otp.repository })
 
-    const result = await service.requestOtp({ phone: '+33600000000' })
+    const result = await service.requestOtp({ phone: '+33600000000' }, {})
 
     expect(result.ok).toBe(true)
     expect(otp.created).toHaveLength(0)
@@ -135,19 +170,49 @@ describe('DefaultClientAuthService.requestOtp', () => {
   it('succeeds generically for an inactive account, without creating an OTP', async () => {
     const inactive: ClientAccountRecord = { ...ACCOUNT, isActive: false }
     const otp = fakeOtpRepository(null)
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(inactive),
-      fakeRefreshTokenRepository().repository,
-      otp.repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ clientAccountRepository: fakeClientAccountRepository(inactive), otpRepository: otp.repository })
 
-    const result = await service.requestOtp({ phone: '+33612345601' })
+    const result = await service.requestOtp({ phone: '+33612345601' }, {})
 
     expect(result.ok).toBe(true)
     expect(otp.created).toHaveLength(0)
+  })
+
+  it('records the attempt under kind OTP_REQUEST, keyed by phone, regardless of account existence', async () => {
+    const attempts = fakeLoginAttemptRepository()
+    const service = buildService({
+      clientAccountRepository: fakeClientAccountRepository(null),
+      loginAttemptRepository: attempts.repository,
+    })
+
+    await service.requestOtp({ phone: '+33600000000' }, { ipAddress: '203.0.113.1' })
+
+    expect(attempts.records).toEqual([
+      { kind: 'OTP_REQUEST', identifier: '+33600000000', succeeded: true, ipAddress: '203.0.113.1' },
+    ])
+  })
+
+  it('rejects once the rate limit is reached, before creating an OTP', async () => {
+    const otp = fakeOtpRepository(null)
+    const service = buildService({ otpRepository: otp.repository, otpRateLimitService: lockedRateLimit() })
+
+    const result = await service.requestOtp({ phone: '+33612345601' }, {})
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('too-many-attempts')
+    expect(otp.created).toHaveLength(0)
+  })
+
+  it('rejects an unknown phone the same way once rate-limited (no enumeration via the rate-limit gate)', async () => {
+    const service = buildService({
+      clientAccountRepository: fakeClientAccountRepository(null),
+      otpRateLimitService: lockedRateLimit(),
+    })
+
+    const result = await service.requestOtp({ phone: '+33600000000' }, {})
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('too-many-attempts')
   })
 })
 
@@ -156,14 +221,7 @@ describe('DefaultClientAuthService.verifyOtp', () => {
     const otp = fakeOtpRepository()
     const refreshTokens = fakeRefreshTokenRepository()
     const loginLogs = fakeLoginLogRepository()
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      refreshTokens.repository,
-      otp.repository,
-      loginLogs.repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ refreshTokenRepository: refreshTokens.repository, otpRepository: otp.repository, loginLogRepository: loginLogs.repository })
 
     const result = await service.verifyOtp({ phone: '+33612345601', code: '123456' }, {})
 
@@ -179,14 +237,7 @@ describe('DefaultClientAuthService.verifyOtp', () => {
   })
 
   it('rejects an unknown phone with the same generic error as a wrong code (anti-enumeration)', async () => {
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(null),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ clientAccountRepository: fakeClientAccountRepository(null) })
 
     const result = await service.verifyOtp({ phone: '+33600000000', code: '123456' }, {})
 
@@ -195,14 +246,7 @@ describe('DefaultClientAuthService.verifyOtp', () => {
   })
 
   it('rejects when no valid OTP exists (expired or never requested) with the same generic error', async () => {
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository(null).repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ otpRepository: fakeOtpRepository(null).repository })
 
     const result = await service.verifyOtp({ phone: '+33612345601', code: '123456' }, {})
 
@@ -211,30 +255,9 @@ describe('DefaultClientAuthService.verifyOtp', () => {
   })
 
   it('produces an identical error for unknown account, expired OTP, and wrong code (no enumeration oracle)', async () => {
-    const unknownAccountService = new DefaultClientAuthService(
-      fakeClientAccountRepository(null),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
-    const noOtpService = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository(null).repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
-    const wrongCodeService = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(false),
-      fakeTokenService(),
-    )
+    const unknownAccountService = buildService({ clientAccountRepository: fakeClientAccountRepository(null) })
+    const noOtpService = buildService({ otpRepository: fakeOtpRepository(null).repository })
+    const wrongCodeService = buildService({ otpService: fakeOtpService(false) })
 
     const [unknownAccountResult, noOtpResult, wrongCodeResult] = await Promise.all([
       unknownAccountService.verifyOtp({ phone: '+33600000000', code: '123456' }, {}),
@@ -251,14 +274,7 @@ describe('DefaultClientAuthService.verifyOtp', () => {
 
   it('rejects and increments attempts on a wrong code', async () => {
     const otp = fakeOtpRepository()
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      otp.repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(false),
-      fakeTokenService(),
-    )
+    const service = buildService({ otpRepository: otp.repository, otpService: fakeOtpService(false) })
 
     const result = await service.verifyOtp({ phone: '+33612345601', code: '000000' }, {})
 
@@ -271,14 +287,7 @@ describe('DefaultClientAuthService.verifyOtp', () => {
   it('rejects the loser of a concurrent consume race, without issuing tokens', async () => {
     const otp = fakeOtpRepository(VALID_OTP, false)
     const refreshTokens = fakeRefreshTokenRepository()
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      refreshTokens.repository,
-      otp.repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ refreshTokenRepository: refreshTokens.repository, otpRepository: otp.repository })
 
     const result = await service.verifyOtp({ phone: '+33612345601', code: '123456' }, {})
 
@@ -290,14 +299,7 @@ describe('DefaultClientAuthService.verifyOtp', () => {
   it('rejects once the OTP has reached the max attempts, without checking the code', async () => {
     const maxedOut: OtpRecord = { ...VALID_OTP, attempts: 5 }
     const otp = fakeOtpRepository(maxedOut)
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      otp.repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ otpRepository: otp.repository })
 
     const result = await service.verifyOtp({ phone: '+33612345601', code: '123456' }, {})
 
@@ -309,14 +311,7 @@ describe('DefaultClientAuthService.verifyOtp', () => {
 
 describe('DefaultClientAuthService.getMe', () => {
   it('returns the user for a valid client access token', async () => {
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService()
 
     const result = await service.getMe('access-c1')
 
@@ -325,14 +320,7 @@ describe('DefaultClientAuthService.getMe', () => {
   })
 
   it('rejects a staff access token used against the client service', async () => {
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService()
 
     const result = await service.getMe('access-staff-token')
 
@@ -353,14 +341,7 @@ describe('DefaultClientAuthService.refresh', () => {
 
   it('rotates the refresh token on success', async () => {
     const refreshTokens = fakeRefreshTokenRepository()
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      refreshTokens.repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ refreshTokenRepository: refreshTokens.repository })
 
     const result = await service.refresh(VALID_CLIENT_RECORD)
 
@@ -381,14 +362,7 @@ describe('DefaultClientAuthService.refresh', () => {
       // Simulates another concurrent refresh() call having already revoked this token.
       revoke: async () => false,
     }
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      racingRefreshTokens,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ refreshTokenRepository: racingRefreshTokens })
 
     const result = await service.refresh(VALID_CLIENT_RECORD)
 
@@ -408,14 +382,7 @@ describe('DefaultClientAuthService.refresh', () => {
         throw new Error('transient database error')
       },
     }
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      failingRefreshTokens,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ refreshTokenRepository: failingRefreshTokens })
 
     await expect(service.refresh(VALID_CLIENT_RECORD)).rejects.toThrow('transient database error')
     expect(created).toHaveLength(0)
@@ -430,14 +397,7 @@ describe('DefaultClientAuthService.refresh', () => {
       expiresAt: new Date(Date.now() + 1000),
       revokedAt: null,
     }
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService()
 
     const result = await service.refresh(staffOwned)
 
@@ -447,14 +407,7 @@ describe('DefaultClientAuthService.refresh', () => {
 
   it('rejects when the account is inactive', async () => {
     const inactive: ClientAccountRecord = { ...ACCOUNT, isActive: false }
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(inactive),
-      fakeRefreshTokenRepository().repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ clientAccountRepository: fakeClientAccountRepository(inactive) })
 
     const result = await service.refresh(VALID_CLIENT_RECORD)
 
@@ -466,14 +419,7 @@ describe('DefaultClientAuthService.refresh', () => {
 describe('DefaultClientAuthService.logout', () => {
   it('revokes the refresh token', async () => {
     const refreshTokens = fakeRefreshTokenRepository()
-    const service = new DefaultClientAuthService(
-      fakeClientAccountRepository(),
-      refreshTokens.repository,
-      fakeOtpRepository().repository,
-      fakeLoginLogRepository().repository,
-      fakeOtpService(true),
-      fakeTokenService(),
-    )
+    const service = buildService({ refreshTokenRepository: refreshTokens.repository })
 
     await service.logout('refresh-raw-token')
 

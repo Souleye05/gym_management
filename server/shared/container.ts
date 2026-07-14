@@ -9,6 +9,7 @@ import { Argon2PasswordService } from '../auth/infrastructure/argon2-password.se
 import { JwtTokenService } from '../auth/infrastructure/jwt-token.service'
 import { Sha256OtpService } from '../auth/infrastructure/sha256-otp.service'
 import { LoginRateLimitService } from '../auth/services/login-rate-limit.service'
+import { OtpRateLimitService } from '../auth/services/otp-rate-limit.service'
 import { DefaultStaffAuthService } from '../auth/services/default-staff-auth.service'
 import { DefaultClientAuthService } from '../auth/services/default-client-auth.service'
 import { DefaultRefreshTokenLookupService } from '../auth/services/default-refresh-token-lookup.service'
@@ -39,6 +40,7 @@ function createContainer(): Container {
   const tokenService = new JwtTokenService(jwtSecret)
   const otpService = new Sha256OtpService()
   const rateLimitService = new LoginRateLimitService(loginAttemptRepository)
+  const otpRateLimitService = new OtpRateLimitService(loginAttemptRepository)
   const refreshTokenLookupService = new DefaultRefreshTokenLookupService(refreshTokenRepository, tokenService)
 
   const staffAuthService = new DefaultStaffAuthService(
@@ -55,9 +57,11 @@ function createContainer(): Container {
     clientAccountRepository,
     refreshTokenRepository,
     otpRepository,
+    loginAttemptRepository,
     loginLogRepository,
     otpService,
     tokenService,
+    otpRateLimitService,
   )
 
   return { staffAuthService, clientAuthService, refreshTokenLookupService }

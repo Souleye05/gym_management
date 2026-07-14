@@ -8,9 +8,11 @@ import type { AuthTokens } from '../domain/tokens'
 import type { ClientAccountRepository } from '../repositories/client-account.repository'
 import type { RefreshTokenRecord, RefreshTokenRepository } from '../repositories/refresh-token.repository'
 import type { OtpRepository } from '../repositories/otp.repository'
+import type { LoginAttemptRepository } from '../repositories/login-attempt.repository'
 import type { LoginLogRepository } from '../repositories/login-log.repository'
 import type { OtpService } from './otp.service'
 import type { TokenService } from './token.service'
+import type { RateLimitService } from './rate-limit.service'
 import type { ClientAuthService } from './client-auth.service'
 
 const REFRESH_TOKEN_DURATION_MS = REFRESH_TOKEN_TTL_SECONDS * 1000
@@ -29,12 +31,27 @@ export class DefaultClientAuthService implements ClientAuthService {
     private readonly clientAccountRepository: ClientAccountRepository,
     private readonly refreshTokenRepository: RefreshTokenRepository,
     private readonly otpRepository: OtpRepository,
+    private readonly loginAttemptRepository: LoginAttemptRepository,
     private readonly loginLogRepository: LoginLogRepository,
     private readonly otpService: OtpService,
     private readonly tokenService: TokenService,
+    private readonly otpRateLimitService: RateLimitService,
   ) {}
 
-  async requestOtp(input: RequestOtpDto): Promise<Result<void, AuthDomainError>> {
+  async requestOtp(input: RequestOtpDto, context: RequestContext): Promise<Result<void, AuthDomainError>> {
+    // Rate-limited on the requested phone number itself, regardless of whether it maps to a real
+    // account — gating only on known accounts would let an attacker distinguish "locked out" (real
+    // account, spammed) from "never locked" (unknown number), defeating the anti-enumeration goal below.
+    const notLocked = await this.otpRateLimitService.assertNotLocked(input.phone)
+    if (!notLocked.ok) return err(notLocked.error)
+
+    await this.loginAttemptRepository.record({
+      kind: 'OTP_REQUEST',
+      identifier: input.phone,
+      succeeded: true,
+      ipAddress: context.ipAddress,
+    })
+
     const account = await this.clientAccountRepository.findByPhone(input.phone)
     if (account && account.isActive) {
       const { hash } = this.otpService.generate()

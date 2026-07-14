@@ -15,6 +15,11 @@ enum Role {
   AGENT
 }
 
+enum AttemptKind {
+  LOGIN
+  OTP_REQUEST
+}
+
 enum LoginKind {
   STAFF
   CLIENT
@@ -88,16 +93,17 @@ model OtpCode {
 }
 
 model LoginAttempt {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
+  kind           AttemptKind @default(LOGIN)
   staffAccountId String?
   identifier     String
   succeeded      Boolean
   ipAddress      String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime    @default(now())
 
   staffAccount StaffAccount? @relation(fields: [staffAccountId], references: [id], onDelete: SetNull)
 
-  @@index([identifier, createdAt])
+  @@index([kind, identifier, createdAt])
   @@map("login_attempts")
 }
 

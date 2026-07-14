@@ -7,7 +7,7 @@ import type { AuthTokens } from '../domain/tokens'
 import type { RefreshTokenRecord } from '../repositories/refresh-token.repository'
 
 export interface ClientAuthService {
-  requestOtp(input: RequestOtpDto): Promise<Result<void, AuthDomainError>>
+  requestOtp(input: RequestOtpDto, context: RequestContext): Promise<Result<void, AuthDomainError>>
   verifyOtp(input: VerifyOtpDto, context: RequestContext): Promise<Result<{ user: ClientUser; tokens: AuthTokens }, AuthDomainError>>
   logout(refreshToken: string): Promise<void>
   getMe(accessToken: string): Promise<Result<ClientUser, AuthDomainError>>

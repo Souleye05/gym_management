@@ -53,6 +53,7 @@ export class DefaultStaffAuthService implements StaffAuthService {
 
     await Promise.all([
       this.loginAttemptRepository.record({
+        kind: 'LOGIN',
         identifier: input.email,
         succeeded: true,
         staffAccountId: account.id,
@@ -118,6 +119,7 @@ export class DefaultStaffAuthService implements StaffAuthService {
   private async recordFailure(email: string, context: RequestContext, staffAccountId?: string): Promise<void> {
     await Promise.all([
       this.loginAttemptRepository.record({
+        kind: 'LOGIN',
         identifier: email,
         succeeded: false,
         staffAccountId,
