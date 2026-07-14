@@ -12,12 +12,15 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ClientStatusBadge } from '@/components/clients/client-status-badge'
 import { useClientStatus } from '@/components/clients/use-client-status'
-import { ClientSearch } from '@/components/sessions/client-search'
+import { ClientIdentification } from '@/components/scan/client-identification'
+import { IneligibilityNotice } from '@/components/scan/ineligibility-notice'
 import { PaymentMethodPicker } from '@/components/sessions/payment-method-picker'
 import { SessionConfirmation } from '@/components/sessions/session-confirmation'
 import { VisitorSessionForm } from '@/components/sessions/visitor-session-form'
 import { useClients } from '@/components/providers/clients-provider'
 import { useSessions } from '@/components/providers/sessions-provider'
+import { useSubscriptions } from '@/components/providers/subscriptions-provider'
+import { checkSessionEligibility } from '@/lib/sessions/eligibility'
 import type { Client } from '@/lib/clients/types'
 import type { Session } from '@/lib/sessions/types'
 import type { PaymentMethod } from '@/lib/subscriptions/types'
@@ -25,20 +28,82 @@ import type { PaymentMethod } from '@/lib/subscriptions/types'
 const currency = (value: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value)
 
-type SubscriberStep = 'search' | 'payment'
+type SubscriberStep = 'identify' | 'payment'
 
 function SelectedClientStatus({ clientId }: { clientId: string }) {
   const status = useClientStatus(clientId)
   return <ClientStatusBadge status={status} />
 }
 
+function SubscriberEligibilityStep({
+  client,
+  paymentMethod,
+  onPaymentMethodChange,
+  onBack,
+  onConfirm,
+  onGoToDailySession,
+  onViewProfile,
+}: {
+  client: Client
+  paymentMethod: PaymentMethod
+  onPaymentMethodChange: (value: PaymentMethod) => void
+  onBack: () => void
+  onConfirm: () => void
+  onGoToDailySession: () => void
+  onViewProfile: () => void
+}) {
+  const { getCurrentSubscription } = useSubscriptions()
+  const subscription = getCurrentSubscription(client.id)
+  const eligibility = checkSessionEligibility(subscription)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={client.name} />
+          <span className="text-sm font-medium">{client.name}</span>
+        </div>
+        <SelectedClientStatus clientId={client.id} />
+      </div>
+      {eligibility.allowed ? (
+        <>
+          <PaymentMethodPicker value={paymentMethod} onChange={onPaymentMethodChange} />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={onBack}>
+              Retour
+            </Button>
+            <Button type="button" className="bg-gradient-brand text-primary-foreground" onClick={onConfirm}>
+              Confirmer
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <IneligibilityNotice
+            eligibility={eligibility}
+            onRenew={onViewProfile}
+            onCreateSubscription={onViewProfile}
+            onDailySession={onGoToDailySession}
+            onViewProfile={onViewProfile}
+          />
+          <div className="flex justify-end pt-2">
+            <Button type="button" variant="outline" onClick={onBack}>
+              Retour
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function SeancesPage() {
   const router = useRouter()
-  const { clients } = useClients()
+  const { clients, clientRepository } = useClients()
   const { getSessionsForToday, recordSubscriberSession, recordVisitorSession } = useSessions()
 
   const [subscriberDialogOpen, setSubscriberDialogOpen] = useState(false)
-  const [subscriberStep, setSubscriberStep] = useState<SubscriberStep>('search')
+  const [subscriberStep, setSubscriberStep] = useState<SubscriberStep>('identify')
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
 
@@ -52,23 +117,27 @@ export default function SeancesPage() {
   const clientName = (clientId: string) => clients.find((c) => c.id === clientId)?.name ?? 'Client inconnu'
 
   const openSubscriberDialog = () => {
-    setSubscriberStep('search')
+    setSubscriberStep('identify')
     setSelectedClient(null)
     setPaymentMethod('cash')
     setSubscriberDialogOpen(true)
   }
 
-  const handleSelectClient = (client: Client) => {
+  const handleIdentifyClient = (client: Client) => {
     setSelectedClient(client)
     setSubscriberStep('payment')
   }
 
   const handleConfirmSubscriber = () => {
     if (!selectedClient) return
-    const created = recordSubscriberSession({ clientId: selectedClient.id, paymentMethod })
-    setSubscriberDialogOpen(false)
-    setConfirmationClientName(selectedClient.name)
-    setConfirmation(created)
+    const result = recordSubscriberSession({ clientId: selectedClient.id, paymentMethod })
+    if (result.ok) {
+      setSubscriberDialogOpen(false)
+      setConfirmationClientName(selectedClient.name)
+      setConfirmation(result.session)
+    }
+    // result.ok === false is unreachable here since the "Confirmer" button is only rendered
+    // when eligibility.allowed is already true (see SubscriberEligibilityStep above).
   }
 
   const handleConfirmVisitor = (values: { fullName: string; phoneNumber: string; paymentMethod: PaymentMethod }) => {
@@ -148,31 +217,25 @@ export default function SeancesPage() {
         <DialogHeader>
           <DialogTitle>Enregistrer la séance d'un abonné</DialogTitle>
           <DialogDescription>
-            {subscriberStep === 'search' ? 'Recherchez le client concerné.' : 'Choisissez le mode de paiement.'}
+            {subscriberStep === 'identify' ? 'Identifiez le client concerné.' : 'Vérifiez le statut et confirmez.'}
           </DialogDescription>
         </DialogHeader>
-        {subscriberStep === 'search' ? (
-          <ClientSearch clients={clients} onSelect={handleSelectClient} />
+        {subscriberStep === 'identify' ? (
+          <ClientIdentification clientRepository={clientRepository} onIdentified={handleIdentifyClient} />
         ) : (
           selectedClient && (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <Avatar name={selectedClient.name} />
-                  <span className="text-sm font-medium">{selectedClient.name}</span>
-                </div>
-                <SelectedClientStatus clientId={selectedClient.id} />
-              </div>
-              <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setSubscriberStep('search')}>
-                  Retour
-                </Button>
-                <Button type="button" className="bg-gradient-brand text-primary-foreground" onClick={handleConfirmSubscriber}>
-                  Confirmer
-                </Button>
-              </div>
-            </div>
+            <SubscriberEligibilityStep
+              client={selectedClient}
+              paymentMethod={paymentMethod}
+              onPaymentMethodChange={setPaymentMethod}
+              onBack={() => setSubscriberStep('identify')}
+              onConfirm={handleConfirmSubscriber}
+              onGoToDailySession={() => {
+                setSubscriberDialogOpen(false)
+                setVisitorDialogOpen(true)
+              }}
+              onViewProfile={() => router.push(`/clients/${selectedClient.id}`)}
+            />
           )
         )}
       </Dialog>
