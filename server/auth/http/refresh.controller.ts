@@ -3,7 +3,6 @@ import { apiFailureFromDomainError, apiSuccess } from '../../shared/api-response
 import { readRefreshTokenCookie, setAuthCookies } from '../../shared/cookies'
 import { statusForDomainError } from '../../shared/http-status'
 import { getContainer } from '../../shared/container'
-import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 
 const INVALID_REFRESH_TOKEN = { code: 'invalid-refresh-token' as const, message: 'Session expirée.' }
 
@@ -28,6 +27,6 @@ export async function refreshController(req: NextRequest): Promise<NextResponse>
   }
 
   const response = NextResponse.json(apiSuccess(null, 'Session rafraîchie'))
-  setAuthCookies(response, result.value, REFRESH_TOKEN_TTL_SECONDS)
+  setAuthCookies(response, result.value)
   return response
 }

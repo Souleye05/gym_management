@@ -17,8 +17,10 @@ const REFRESH_TOKEN_DURATION_MS = REFRESH_TOKEN_TTL_SECONDS * 1000
 const OTP_DURATION_MS = 10 * 60 * 1000
 const MAX_OTP_ATTEMPTS = 5
 
-const UNKNOWN_ACCOUNT: AuthDomainError = { code: 'unknown-account', message: 'Compte introuvable.' }
-const OTP_EXPIRED: AuthDomainError = { code: 'otp-expired', message: 'Code expiré, veuillez en redemander un.' }
+// Deliberately identical for unknown account, expired/missing OTP, and wrong code: verifyOtp
+// must never let a caller distinguish "this phone isn't registered" from "wrong/expired code"
+// (see requestOtp's own anti-enumeration comment) — otherwise verify-otp becomes an oracle for
+// enumerating registered phone numbers without ever calling request-otp.
 const INVALID_OTP: AuthDomainError = { code: 'invalid-otp', message: 'Code incorrect.' }
 const TOO_MANY_ATTEMPTS: AuthDomainError = { code: 'too-many-attempts', message: 'Trop de tentatives, veuillez redemander un code.' }
 
@@ -52,12 +54,12 @@ export class DefaultClientAuthService implements ClientAuthService {
   ): Promise<Result<{ user: ClientUser; tokens: AuthTokens }, AuthDomainError>> {
     const account = await this.clientAccountRepository.findByPhone(input.phone)
     if (!account || !account.isActive) {
-      return err(UNKNOWN_ACCOUNT)
+      return err(INVALID_OTP)
     }
 
     const otp = await this.otpRepository.findLatestValid(account.id)
     if (!otp) {
-      return err(OTP_EXPIRED)
+      return err(INVALID_OTP)
     }
 
     if (otp.attempts >= MAX_OTP_ATTEMPTS) {
@@ -119,8 +121,14 @@ export class DefaultClientAuthService implements ClientAuthService {
       return err({ code: 'account-inactive', message: 'Compte désactivé.' })
     }
 
+    // Revoke first: it's the atomic claim that prevents two concurrent refresh calls for the
+    // same token from both succeeding. Only the caller that actually revokes issues a new token.
+    const claimed = await this.refreshTokenRepository.revoke(record.tokenHash)
+    if (!claimed) {
+      return err({ code: 'invalid-refresh-token', message: 'Session expirée.' })
+    }
+
     const tokens = await this.issueTokens(account.id, {})
-    await this.refreshTokenRepository.revoke(record.tokenHash)
 
     return ok(tokens)
   }

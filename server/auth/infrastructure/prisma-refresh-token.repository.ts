@@ -27,10 +27,11 @@ export class PrismaRefreshTokenRepository implements RefreshTokenRepository {
     })
   }
 
-  async revoke(tokenHash: string): Promise<void> {
-    await this.prisma.refreshToken.updateMany({
+  async revoke(tokenHash: string): Promise<boolean> {
+    const { count } = await this.prisma.refreshToken.updateMany({
       where: { tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
     })
+    return count > 0
   }
 }

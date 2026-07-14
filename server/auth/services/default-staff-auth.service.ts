@@ -103,8 +103,14 @@ export class DefaultStaffAuthService implements StaffAuthService {
       return err({ code: 'account-inactive', message: 'Compte désactivé.' })
     }
 
+    // Revoke first: it's the atomic claim that prevents two concurrent refresh calls for the
+    // same token from both succeeding. Only the caller that actually revokes issues a new token.
+    const claimed = await this.refreshTokenRepository.revoke(record.tokenHash)
+    if (!claimed) {
+      return err({ code: 'invalid-refresh-token', message: 'Session expirée.' })
+    }
+
     const tokens = await this.issueTokens(account.id, account.role, {})
-    await this.refreshTokenRepository.revoke(record.tokenHash)
 
     return ok(tokens)
   }

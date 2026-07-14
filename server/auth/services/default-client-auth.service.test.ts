@@ -41,6 +41,7 @@ function fakeRefreshTokenRepository(existing: RefreshTokenRecord | null = null) 
     findValidByHash: async () => existing,
     revoke: async (tokenHash) => {
       revoked.push(tokenHash)
+      return true
     },
   }
   return { repository, created, revoked }
@@ -177,7 +178,7 @@ describe('DefaultClientAuthService.verifyOtp', () => {
     expect(loginLogs.records[0].succeeded).toBe(true)
   })
 
-  it('rejects an unknown phone', async () => {
+  it('rejects an unknown phone with the same generic error as a wrong code (anti-enumeration)', async () => {
     const service = new DefaultClientAuthService(
       fakeClientAccountRepository(null),
       fakeRefreshTokenRepository().repository,
@@ -190,10 +191,10 @@ describe('DefaultClientAuthService.verifyOtp', () => {
     const result = await service.verifyOtp({ phone: '+33600000000', code: '123456' }, {})
 
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error.code).toBe('unknown-account')
+    if (!result.ok) expect(result.error.code).toBe('invalid-otp')
   })
 
-  it('rejects when no valid OTP exists (expired or never requested)', async () => {
+  it('rejects when no valid OTP exists (expired or never requested) with the same generic error', async () => {
     const service = new DefaultClientAuthService(
       fakeClientAccountRepository(),
       fakeRefreshTokenRepository().repository,
@@ -206,7 +207,46 @@ describe('DefaultClientAuthService.verifyOtp', () => {
     const result = await service.verifyOtp({ phone: '+33612345601', code: '123456' }, {})
 
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error.code).toBe('otp-expired')
+    if (!result.ok) expect(result.error.code).toBe('invalid-otp')
+  })
+
+  it('produces an identical error for unknown account, expired OTP, and wrong code (no enumeration oracle)', async () => {
+    const unknownAccountService = new DefaultClientAuthService(
+      fakeClientAccountRepository(null),
+      fakeRefreshTokenRepository().repository,
+      fakeOtpRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(true),
+      fakeTokenService(),
+    )
+    const noOtpService = new DefaultClientAuthService(
+      fakeClientAccountRepository(),
+      fakeRefreshTokenRepository().repository,
+      fakeOtpRepository(null).repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(true),
+      fakeTokenService(),
+    )
+    const wrongCodeService = new DefaultClientAuthService(
+      fakeClientAccountRepository(),
+      fakeRefreshTokenRepository().repository,
+      fakeOtpRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(false),
+      fakeTokenService(),
+    )
+
+    const [unknownAccountResult, noOtpResult, wrongCodeResult] = await Promise.all([
+      unknownAccountService.verifyOtp({ phone: '+33600000000', code: '123456' }, {}),
+      noOtpService.verifyOtp({ phone: '+33612345601', code: '123456' }, {}),
+      wrongCodeService.verifyOtp({ phone: '+33612345601', code: '123456' }, {}),
+    ])
+
+    expect(unknownAccountResult).toEqual(noOtpResult)
+    expect(noOtpResult).toEqual(wrongCodeResult)
+    if (!unknownAccountResult.ok) {
+      expect(unknownAccountResult.error).toEqual({ code: 'invalid-otp', message: 'Code incorrect.' })
+    }
   })
 
   it('rejects and increments attempts on a wrong code', async () => {
@@ -331,15 +371,41 @@ describe('DefaultClientAuthService.refresh', () => {
     expect(refreshTokens.created[0].expiresAt.getTime()).toBeCloseTo(expectedExpiry, -3)
   })
 
-  it('does not revoke the old token if issuing the new one fails', async () => {
-    const revoked: string[] = []
-    const failingRefreshTokens: RefreshTokenRepository = {
-      create: async () => {
-        throw new Error('transient database error')
+  it('rejects without issuing a new token when it loses the revoke race (concurrent refresh)', async () => {
+    const created: unknown[] = []
+    const racingRefreshTokens: RefreshTokenRepository = {
+      create: async (input) => {
+        created.push(input)
       },
       findValidByHash: async () => VALID_CLIENT_RECORD,
-      revoke: async (tokenHash) => {
-        revoked.push(tokenHash)
+      // Simulates another concurrent refresh() call having already revoked this token.
+      revoke: async () => false,
+    }
+    const service = new DefaultClientAuthService(
+      fakeClientAccountRepository(),
+      racingRefreshTokens,
+      fakeOtpRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakeOtpService(true),
+      fakeTokenService(),
+    )
+
+    const result = await service.refresh(VALID_CLIENT_RECORD)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('invalid-refresh-token')
+    expect(created).toHaveLength(0)
+  })
+
+  it('does not issue a new token if revoking the old one fails', async () => {
+    const created: unknown[] = []
+    const failingRefreshTokens: RefreshTokenRepository = {
+      create: async (input) => {
+        created.push(input)
+      },
+      findValidByHash: async () => VALID_CLIENT_RECORD,
+      revoke: async () => {
+        throw new Error('transient database error')
       },
     }
     const service = new DefaultClientAuthService(
@@ -352,7 +418,7 @@ describe('DefaultClientAuthService.refresh', () => {
     )
 
     await expect(service.refresh(VALID_CLIENT_RECORD)).rejects.toThrow('transient database error')
-    expect(revoked).toHaveLength(0)
+    expect(created).toHaveLength(0)
   })
 
   it('rejects a refresh token record with no client account (e.g. owned by a staff member)', async () => {

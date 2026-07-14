@@ -1,5 +1,5 @@
 import type { NextRequest, NextResponse } from 'next/server'
-import { ACCESS_TOKEN_TTL_SECONDS } from '../auth/domain/session-durations'
+import { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from '../auth/domain/session-durations'
 import type { AuthTokens } from '../auth/domain/tokens'
 
 const ACCESS_TOKEN_COOKIE = 'access_token'
@@ -9,7 +9,7 @@ function isSecure(): boolean {
   return process.env.NODE_ENV === 'production'
 }
 
-export function setAuthCookies(response: NextResponse, tokens: AuthTokens, refreshTokenTtlSeconds: number): void {
+export function setAuthCookies(response: NextResponse, tokens: AuthTokens): void {
   response.cookies.set(ACCESS_TOKEN_COOKIE, tokens.accessToken, {
     httpOnly: true,
     secure: isSecure(),
@@ -22,7 +22,7 @@ export function setAuthCookies(response: NextResponse, tokens: AuthTokens, refre
     secure: isSecure(),
     sameSite: 'lax',
     path: '/api/auth',
-    maxAge: refreshTokenTtlSeconds,
+    maxAge: REFRESH_TOKEN_TTL_SECONDS,
   })
 }
 

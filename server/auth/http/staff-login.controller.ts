@@ -4,7 +4,6 @@ import { extractRequestContext } from '../../shared/extract-request-context'
 import { statusForDomainError } from '../../shared/http-status'
 import { setAuthCookies } from '../../shared/cookies'
 import { getContainer } from '../../shared/container'
-import { REFRESH_TOKEN_TTL_SECONDS } from '../domain/session-durations'
 import { StaffLoginSchema } from '../dto/staff-login.dto'
 
 export async function staffLoginController(req: NextRequest): Promise<NextResponse> {
@@ -22,6 +21,6 @@ export async function staffLoginController(req: NextRequest): Promise<NextRespon
   }
 
   const response = NextResponse.json(apiSuccess({ user: result.value.user }, 'Connexion réussie'))
-  setAuthCookies(response, result.value.tokens, REFRESH_TOKEN_TTL_SECONDS)
+  setAuthCookies(response, result.value.tokens)
   return response
 }

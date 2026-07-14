@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { describe, expect, it } from 'vitest'
+import { REFRESH_TOKEN_TTL_SECONDS } from '../auth/domain/session-durations'
 import { clearAuthCookies, readAccessTokenCookie, readRefreshTokenCookie, setAuthCookies } from './cookies'
 
 const TOKENS = { accessToken: 'access-abc', refreshToken: 'refresh-xyz' }
-const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
 
 describe('cookies', () => {
   it('sets both auth cookies as HttpOnly with the expected paths', () => {
     const response = NextResponse.json({ ok: true })
 
-    setAuthCookies(response, TOKENS, REFRESH_TOKEN_TTL_SECONDS)
+    setAuthCookies(response, TOKENS)
 
     const access = response.cookies.get('access_token')
     const refresh = response.cookies.get('refresh_token')
@@ -23,18 +23,9 @@ describe('cookies', () => {
     expect(setCookieHeader.toLowerCase()).toContain('httponly')
   })
 
-  it('uses a different refresh token TTL when given one (e.g. for client sessions)', () => {
-    const response = NextResponse.json({ ok: true })
-    const clientTtlSeconds = 24 * 60 * 60
-
-    setAuthCookies(response, TOKENS, clientTtlSeconds)
-
-    expect(response.cookies.get('refresh_token')?.maxAge).toBe(clientTtlSeconds)
-  })
-
   it('clears both auth cookies', () => {
     const response = NextResponse.json({ ok: true })
-    setAuthCookies(response, TOKENS, REFRESH_TOKEN_TTL_SECONDS)
+    setAuthCookies(response, TOKENS)
 
     clearAuthCookies(response)
 

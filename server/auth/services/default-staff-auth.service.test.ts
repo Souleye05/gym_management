@@ -40,6 +40,7 @@ function fakeRefreshTokenRepository(existing: RefreshTokenRecord | null = null) 
     findValidByHash: async () => existing,
     revoke: async (tokenHash) => {
       revoked.push(tokenHash)
+      return true
     },
   }
   return { repository, created, revoked }
@@ -281,15 +282,42 @@ describe('DefaultStaffAuthService.refresh', () => {
     expect(refreshTokens.created).toHaveLength(1)
   })
 
-  it('does not revoke the old token if issuing the new one fails', async () => {
-    const revoked: string[] = []
-    const failingRefreshTokens: RefreshTokenRepository = {
-      create: async () => {
-        throw new Error('transient database error')
+  it('rejects without issuing a new token when it loses the revoke race (concurrent refresh)', async () => {
+    const created: unknown[] = []
+    const racingRefreshTokens: RefreshTokenRepository = {
+      create: async (input) => {
+        created.push(input)
       },
       findValidByHash: async () => VALID_STAFF_RECORD,
-      revoke: async (tokenHash) => {
-        revoked.push(tokenHash)
+      // Simulates another concurrent refresh() call having already revoked this token.
+      revoke: async () => false,
+    }
+    const service = new DefaultStaffAuthService(
+      fakeStaffAccountRepository(),
+      racingRefreshTokens,
+      fakeLoginAttemptRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakePasswordService(true),
+      fakeTokenService(),
+      allowingRateLimit(),
+    )
+
+    const result = await service.refresh(VALID_STAFF_RECORD)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('invalid-refresh-token')
+    expect(created).toHaveLength(0)
+  })
+
+  it('does not issue a new token if revoking the old one fails', async () => {
+    const created: unknown[] = []
+    const failingRefreshTokens: RefreshTokenRepository = {
+      create: async (input) => {
+        created.push(input)
+      },
+      findValidByHash: async () => VALID_STAFF_RECORD,
+      revoke: async () => {
+        throw new Error('transient database error')
       },
     }
     const service = new DefaultStaffAuthService(
@@ -303,7 +331,7 @@ describe('DefaultStaffAuthService.refresh', () => {
     )
 
     await expect(service.refresh(VALID_STAFF_RECORD)).rejects.toThrow('transient database error')
-    expect(revoked).toHaveLength(0)
+    expect(created).toHaveLength(0)
   })
 
   it('rejects a refresh token record with no staff account (e.g. owned by a client)', async () => {
