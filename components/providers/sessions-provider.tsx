@@ -3,13 +3,19 @@
 
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 import { useSettings } from '@/components/providers/settings-provider'
+import { useSubscriptions } from '@/components/providers/subscriptions-provider'
+import { checkSessionEligibility, type SessionEligibility } from '@/lib/sessions/eligibility'
 import { mockSessions } from '@/lib/sessions/mock-sessions'
 import type { Session, SubscriberSession, VisitorSession } from '@/lib/sessions/types'
 import type { PaymentMethod } from '@/lib/subscriptions/types'
 
+export type RecordSubscriberSessionResult =
+  | { ok: true; session: SubscriberSession }
+  | { ok: false; eligibility: SessionEligibility & { allowed: false } }
+
 type SessionsContextValue = {
   sessions: Session[]
-  recordSubscriberSession(input: { clientId: string; paymentMethod: PaymentMethod }): SubscriberSession
+  recordSubscriberSession(input: { clientId: string; paymentMethod: PaymentMethod }): RecordSubscriberSessionResult
   recordVisitorSession(input: { fullName: string; phoneNumber: string; paymentMethod: PaymentMethod }): VisitorSession
   getSessionsForClient(clientId: string): SubscriberSession[]
   getSessionsForToday(): Session[]
@@ -29,10 +35,16 @@ function isSameDay(isoA: string, isoB: string): boolean {
 
 export function SessionsProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings()
+  const { getCurrentSubscription } = useSubscriptions()
   const [sessions, setSessions] = useState<Session[]>(() => [...mockSessions])
 
   const recordSubscriberSession = useCallback(
-    (input: { clientId: string; paymentMethod: PaymentMethod }): SubscriberSession => {
+    (input: { clientId: string; paymentMethod: PaymentMethod }): RecordSubscriberSessionResult => {
+      const subscription = getCurrentSubscription(input.clientId)
+      const eligibility = checkSessionEligibility(subscription)
+      if (!eligibility.allowed) {
+        return { ok: false, eligibility }
+      }
       const created: SubscriberSession = {
         type: 'subscriber',
         id: `sess${Date.now()}`,
@@ -42,9 +54,9 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
         checkedInAt: new Date().toISOString(),
       }
       setSessions((prev) => [...prev, created])
-      return created
+      return { ok: true, session: created }
     },
-    [settings.sessionPrice],
+    [settings.sessionPrice, getCurrentSubscription],
   )
 
   const recordVisitorSession = useCallback(
