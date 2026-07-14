@@ -12,6 +12,7 @@ import { ClientForm } from '@/components/clients/client-form'
 import { ClientStatusBadge } from '@/components/clients/client-status-badge'
 import { useClientStatus } from '@/components/clients/use-client-status'
 import { useClients } from '@/components/providers/clients-provider'
+import type { ClientRepository } from '@/lib/clients/repository'
 import type { Client, ClientStatus } from '@/lib/clients/types'
 
 const STATUS_FILTERS: { value: ClientStatus | 'all'; label: string }[] = [
@@ -23,21 +24,16 @@ const STATUS_FILTERS: { value: ClientStatus | 'all'; label: string }[] = [
   { value: 'none', label: 'Aucun abonnement' },
 ]
 
-function useFilteredClients(clients: Client[], query: string, statusFilter: ClientStatus | 'all') {
+function useFilteredClients(clients: Client[], clientRepository: ClientRepository, query: string) {
   // Status filtering must happen per-row via useClientStatus (a hook, so it cannot be called
   // inside a plain .filter() callback). This page therefore filters by name/phone only here,
   // and applies the status filter as a second pass using a non-hook status lookup helper is not
   // possible without hooks — instead, status filtering renders all query-matched rows and hides
   // non-matching ones via a wrapper component. See StatusFilteredRow below.
   return useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    if (normalizedQuery.length === 0) return clients
-    return clients.filter(
-      (client) =>
-        client.name.toLowerCase().includes(normalizedQuery) ||
-        client.phone.toLowerCase().includes(normalizedQuery),
-    )
-  }, [clients, query])
+    if (query.trim().length === 0) return clients
+    return clientRepository.search(query)
+  }, [clients, clientRepository, query])
 }
 
 function StatusFilteredRow({
@@ -72,12 +68,12 @@ function StatusFilteredRow({
 
 export default function ClientsPage() {
   const router = useRouter()
-  const { clients, addClient } = useClients()
+  const { clients, addClient, clientRepository } = useClients()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all')
   const [createOpen, setCreateOpen] = useState(false)
 
-  const queryFiltered = useFilteredClients(clients, query, statusFilter)
+  const queryFiltered = useFilteredClients(clients, clientRepository, query)
 
   const handleCreate = (values: { name: string; phone: string; email?: string }) => {
     addClient(values)

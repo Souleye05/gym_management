@@ -4,26 +4,19 @@ import { Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
+import type { ClientRepository } from '@/lib/clients/repository'
 import type { Client } from '@/lib/clients/types'
 
 export function ClientSearch({
-  clients,
+  clientRepository,
   onSelect,
 }: {
-  clients: Client[]
+  clientRepository: ClientRepository
   onSelect: (client: Client) => void
 }) {
   const [query, setQuery] = useState('')
 
-  const results = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    if (normalizedQuery.length === 0) return []
-    return clients.filter(
-      (client) =>
-        client.name.toLowerCase().includes(normalizedQuery) ||
-        client.phone.toLowerCase().includes(normalizedQuery),
-    )
-  }, [clients, query])
+  const results = useMemo(() => clientRepository.search(query), [clientRepository, query])
 
   return (
     <div className="flex flex-col gap-3">
