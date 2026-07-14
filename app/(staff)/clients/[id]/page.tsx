@@ -19,6 +19,7 @@ import { SubscriptionStatusBadge } from '@/components/subscriptions/subscription
 import { PaymentMethodPicker } from '@/components/sessions/payment-method-picker'
 import { SessionConfirmation } from '@/components/sessions/session-confirmation'
 import { IneligibilityNotice } from '@/components/scan/ineligibility-notice'
+import { ClientQrCode } from '@/components/scan/client-qr-code'
 import { useClients } from '@/components/providers/clients-provider'
 import { useSessions } from '@/components/providers/sessions-provider'
 import { useSubscriptions } from '@/components/providers/subscriptions-provider'
@@ -132,15 +133,18 @@ export default function ClientProfilePage() {
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil className="size-4" />
-              Modifier
-            </Button>
-            <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
-              <Trash2 className="size-4" />
-              Supprimer
-            </Button>
+          <div className="flex items-center gap-4">
+            <ClientQrCode cardNumber={client.cardNumber} />
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil className="size-4" />
+                Modifier
+              </Button>
+              <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="size-4" />
+                Supprimer
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
