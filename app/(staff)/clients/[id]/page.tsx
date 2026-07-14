@@ -18,10 +18,12 @@ import { SubscriptionForm } from '@/components/subscriptions/subscription-form'
 import { SubscriptionStatusBadge } from '@/components/subscriptions/subscription-status-badge'
 import { PaymentMethodPicker } from '@/components/sessions/payment-method-picker'
 import { SessionConfirmation } from '@/components/sessions/session-confirmation'
+import { IneligibilityNotice } from '@/components/scan/ineligibility-notice'
 import { useClients } from '@/components/providers/clients-provider'
 import { useSessions } from '@/components/providers/sessions-provider'
 import { useSubscriptions } from '@/components/providers/subscriptions-provider'
 import { PLANS } from '@/lib/subscriptions/plans'
+import { checkSessionEligibility } from '@/lib/sessions/eligibility'
 import type { PaymentMethod, PlanId, Subscription } from '@/lib/subscriptions/types'
 import type { Session } from '@/lib/sessions/types'
 
@@ -68,6 +70,7 @@ export default function ClientProfilePage() {
   const currentSubscription = getCurrentSubscription(client.id)
   const history = getSubscriptionHistory(client.id)
   const sessionHistory = getSessionsForClient(client.id)
+  const sessionEligibility = checkSessionEligibility(currentSubscription)
 
   const handleUpdate = (values: { name: string; phone: string; email?: string }) => {
     updateClient(client.id, values)
@@ -101,9 +104,13 @@ export default function ClientProfilePage() {
   }
 
   const handleConfirmSession = () => {
-    const created = recordSubscriberSession({ clientId: client.id, paymentMethod: sessionPaymentMethod })
-    setSessionDialogOpen(false)
-    setSessionConfirmation(created)
+    const result = recordSubscriberSession({ clientId: client.id, paymentMethod: sessionPaymentMethod })
+    if (result.ok) {
+      setSessionDialogOpen(false)
+      setSessionConfirmation(result.session)
+    }
+    // result.ok === false is unreachable here since the dialog's "Confirmer" button is only
+    // rendered when eligibility.allowed is already true (see the session dialog below).
   }
 
   return (
@@ -286,19 +293,27 @@ export default function ClientProfilePage() {
       <Dialog open={sessionDialogOpen} onOpenChange={setSessionDialogOpen}>
         <DialogHeader>
           <DialogTitle>Enregistrer une séance</DialogTitle>
-          <DialogDescription>Choisissez le mode de paiement pour {client.name}.</DialogDescription>
+          <DialogDescription>
+            {sessionEligibility.allowed
+              ? `Choisissez le mode de paiement pour ${client.name}.`
+              : 'Ce client ne peut pas enregistrer de séance pour le moment.'}
+          </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <PaymentMethodPicker value={sessionPaymentMethod} onChange={setSessionPaymentMethod} />
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setSessionDialogOpen(false)}>
-              Annuler
-            </Button>
-            <Button type="button" className="bg-gradient-brand text-primary-foreground" onClick={handleConfirmSession}>
-              Confirmer
-            </Button>
+        {sessionEligibility.allowed ? (
+          <div className="flex flex-col gap-4">
+            <PaymentMethodPicker value={sessionPaymentMethod} onChange={setSessionPaymentMethod} />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setSessionDialogOpen(false)}>
+                Annuler
+              </Button>
+              <Button type="button" className="bg-gradient-brand text-primary-foreground" onClick={handleConfirmSession}>
+                Confirmer
+              </Button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <IneligibilityNotice eligibility={sessionEligibility} />
+        )}
       </Dialog>
 
       <Dialog open={sessionConfirmation !== null} onOpenChange={(open) => !open && setSessionConfirmation(null)}>
