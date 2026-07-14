@@ -1,8 +1,17 @@
 // components/providers/clients-provider.tsx
 'use client'
 
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { mockClients } from '@/lib/clients/mock-clients'
+import { createInMemoryClientRepository, type ClientRepository } from '@/lib/clients/repository'
 import type { Client } from '@/lib/clients/types'
 
 type NewClientInput = {
@@ -15,6 +24,7 @@ type UpdateClientInput = Partial<Pick<Client, 'name' | 'phone' | 'email'>>
 
 type ClientsContextValue = {
   clients: Client[]
+  clientRepository: ClientRepository
   addClient(input: NewClientInput): Client
   updateClient(id: string, input: UpdateClientInput): void
   deleteClient(id: string): void
@@ -56,8 +66,12 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
     [clients],
   )
 
+  const clientRepository = useMemo(() => createInMemoryClientRepository(clients), [clients])
+
   return (
-    <ClientsContext.Provider value={{ clients, addClient, updateClient, deleteClient, getClient }}>
+    <ClientsContext.Provider
+      value={{ clients, clientRepository, addClient, updateClient, deleteClient, getClient }}
+    >
       {children}
     </ClientsContext.Provider>
   )
