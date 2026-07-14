@@ -1,0 +1,151 @@
+# API Clients — Design
+
+**Date :** 2026-07-14
+**Sous-projet :** suite de 3 / 9 (voir `2026-07-13-gestion-clients-design.md`) — remplace l'annuaire mocké par un backend réel
+**Statut :** Approuvé
+
+## Contexte
+
+Le sous-projet "Gestion Clients" (`2026-07-13-gestion-clients-design.md`) a livré une UI complète (liste, recherche, filtre, CRUD, fiche profil) branchée sur un annuaire mocké en mémoire (`lib/clients/mock-clients.ts`, `components/providers/clients-provider.tsx`). Ce document explicite plusieurs points comme hors périmètre à l'époque : contrainte d'unicité du téléphone, persistance réelle.
+
+Suite au succès du remplacement du mock d'authentification par une vraie API (`2026-07-12-auth-api-design.md`), ce document conçoit le backend réel du module Clients, en Clean Architecture identique à `server/auth/**`, pour que `clients-provider.tsx` puisse être branché sur de vraies routes REST au lieu de l'état React en mémoire.
+
+Ce module est le premier module métier (hors Auth) à obtenir un vrai backend. Abonnements, Séances et Scan QR en dépendent tous (ils référencent un `clientId`) et suivront le même schéma une fois Clients livré.
+
+## Objectif
+
+- Persister les clients en base (Postgres/Prisma), remplaçant l'état React en mémoire.
+- CRUD complet : création, lecture (par id, recherche par nom/téléphone/numéro de carte), mise à jour, désactivation (soft delete).
+- Générer un numéro de carte lisible et durable (`CARD-00001`), sans race condition.
+- Poser (sans l'exploiter) le lien optionnel vers `ClientAccount` (authentification), pour un rattachement futur.
+- Zéro breaking change sur le contrat de données déjà consommé par le frontend (`Client { id, cardNumber, name, phone, email?, joinedAt }`).
+
+## Hors périmètre (explicitement exclu de cette étape)
+
+- Rattachement effectif d'un `Client` à un `ClientAccount` (recherche/validation par téléphone, endpoint de liaison manuelle) — le champ `clientAccountId` existe dans le schéma mais aucune logique ne l'exploite.
+- Intégration frontend (`clients-provider.tsx` continue de lire les mocks jusqu'à un sous-projet suivant validé séparément).
+- Abonnements, Séances, Scan QR réels — ce module fournit uniquement la fondation `Client` dont ces modules auront besoin.
+- Pagination de la recherche/liste — non demandé, ajoutable plus tard sans réécriture du contrat (ajout de `page`/`limit` en query params).
+- Restriction de rôle sur les opérations (création/modification/désactivation) — accessible à `admin` et `agent` de la même façon, cohérent avec le CRUD frontend existant.
+
+## Modèle de données
+
+```prisma
+model Client {
+  id              String    @id @default(cuid())
+  clientAccountId String?   @unique
+  cardSequence    Int       @unique @default(autoincrement())
+  name            String
+  phone           String
+  email           String?
+  isActive        Boolean   @default(true)
+  deletedAt       DateTime?
+  joinedAt        DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id], onDelete: SetNull)
+
+  @@index([phone])
+  @@map("clients")
+}
+```
+
+Décisions et justifications :
+
+- **`clientAccountId` optionnel** : un `Client` peut exister sans jamais avoir de compte de connexion (créé au comptoir), et un `ClientAccount` peut être rattaché plus tard. `onDelete: SetNull` — si le compte d'authentification est un jour supprimé, la fiche client métier reste intacte.
+- **`cardSequence` (entier, pas la string formatée)** : Postgres gère l'incrémentation de façon atomique via sa propre séquence (`@default(autoincrement())` sur un champ non-clé-primaire crée une séquence dédiée). Le format `"CARD-00001"` n'est **jamais stocké** — il est dérivé à la lecture via un helper partagé `formatCardNumber(sequence: number): string`, utilisé partout où un numéro de carte est exposé (API, QR code, UI future). Le frontend ne connaît que `cardNumber: string`, jamais `cardSequence`.
+- **`phone` sans `@unique` en base** : voir section dédiée ci-dessous.
+- **Soft delete (`isActive`/`deletedAt`)**, cohérent avec `StaffAccount`/`ClientAccount` — un hard delete casserait l'intégrité référentielle dès que Abonnements/Séances existeront réellement (FK vers `Client.id`).
+
+### Unicité du téléphone : règle métier, pas contrainte de base
+
+Le téléphone est central (recherche, identification à l'accueil, futur rattachement à `ClientAccount`), mais une contrainte `@unique` stricte en base bloquerait deux cas légitimes : un foyer partageant un numéro, et la réutilisation d'un numéro après désactivation définitive d'un ancien client.
+
+Décision : **pas de contrainte Prisma `@unique`**. L'unicité est appliquée au niveau du Service, scopée aux clients actifs uniquement — avant `createClient`/`updateClient` (changement de téléphone), `DefaultClientService` appelle `repository.findByPhone(phone, { activeOnly: true })` ; en cas de correspondance, retourne `err({ code: 'phone-already-used' })` avant d'écrire en base. Un client désactivé ne bloque jamais la réutilisation de son ancien numéro.
+
+## Architecture (Clean Architecture, miroir de `server/auth/**`)
+
+```
+server/clients/
+  domain/
+    entities.ts             — Client { id, cardNumber, name, phone, email, isActive, joinedAt }
+    errors.ts                — ClientDomainErrorCode: 'not-found' | 'validation-error' | 'phone-already-used'
+  dto/
+    client.dto.ts             — Zod: CreateClientSchema { name, phone, email? }, UpdateClientSchema (Partial)
+  repositories/
+    client.repository.ts      — interface : create, findById, findByPhone, findByCardSequence, search, update, deactivate
+  infrastructure/
+    prisma-client.repository.ts
+    format-card-number.ts     — formatCardNumber(sequence: number): string — seul endroit qui connaît le format "CARD-xxxxx"
+  services/
+    client.service.ts             — interface ClientService
+    default-client.service.ts     — validation métier, traduit toute erreur Prisma en ClientDomainError, ne laisse jamais une exception brute atteindre le Controller
+  http/
+    list-clients.controller.ts     — GET  /api/clients
+    create-client.controller.ts    — POST /api/clients
+    get-client.controller.ts       — GET  /api/clients/:id
+    update-client.controller.ts    — PATCH /api/clients/:id
+    deactivate-client.controller.ts — DELETE /api/clients/:id
+```
+
+Le domaine n'utilise jamais de terminologie liée à Prisma/persistance (pas de `ClientRecord`) — `Client` est le type du domaine ; le modèle Prisma généré (`PrismaClient.client`) reste cantonné à la couche infrastructure.
+
+### Nommage métier : désactivation, pas suppression
+
+Aucune suppression physique n'ayant lieu, le Service expose `deactivateClient(id)`, jamais `deleteClient`. Le Repository peut garder une méthode nommée `deactivate(id)` en interne (soft delete technique) — le vocabulaire "delete" reste circonscrit à la couche infrastructure/HTTP (le verbe HTTP `DELETE` reste conventionnel pour la route), jamais utilisé dans les noms de méthode Service/Domain.
+
+### Recherche : un seul point d'entrée REST, méthodes spécialisées en interne
+
+```
+GET /api/clients?q=&phone=&cardNumber=&status=
+```
+
+Un seul endpoint, extensible par paramètres — pas de multiplication de routes (`/clients/by-phone`, `/clients/by-card`, etc.). Le Controller inspecte les query params reçus et dispatche vers la méthode Service/Repository appropriée :
+- `cardNumber` fourni → `findByCardSequence` (après avoir reparsé `"CARD-00001"` → `1`)
+- `phone` fourni (sans `q`) → `findByPhone`
+- `q` fourni → `search(q)` (substring insensible à la casse sur nom et téléphone, même sémantique que `createInMemoryClientRepository.search` actuel)
+- aucun param → liste complète des clients actifs
+
+Ces méthodes spécialisées (`findByPhone`, `findByCardSequence`, `findById`, `search`) restent exposées sur l'interface `ClientRepository`/`ClientService` pour être réutilisées directement par les futurs modules (Scan QR appellera `findByCardSequence` sans passer par HTTP, une fois construit dans la même codebase serveur).
+
+`status` (filtre `ClientStatus`) est hors périmètre technique de ce module — il dépend d'un abonnement (module Abonnements, pas encore réel) ; le paramètre est réservé dans le contrat mais non implémenté tant qu'Abonnements n'existe pas.
+
+## Erreurs métier
+
+`DefaultClientService` ne laisse jamais une exception Prisma brute remonter :
+
+| Cas | Code erreur | Statut HTTP |
+|---|---|---|
+| `getClient`/`updateClient`/`deactivateClient` sur un id inexistant ou déjà désactivé | `not-found` | 404 |
+| `createClient`/`updateClient` avec un téléphone déjà utilisé par un client actif | `phone-already-used` | 409 |
+| Payload invalide (Zod) | `validation-error` | 400 — géré au Controller, avant d'atteindre le Service |
+| Exception Prisma imprévue (connexion, contrainte inattendue) | — catchée, relancée en erreur générique loggée | 500 |
+
+## Contrat API — zéro breaking change
+
+```ts
+// Toutes les réponses success (GET liste, GET détail, POST, PATCH)
+{
+  id: string
+  cardNumber: string       // "CARD-00001", dérivé de cardSequence, jamais cardSequence brut
+  name: string
+  phone: string
+  email: string | null
+  joinedAt: string          // ISO 8601
+  isActive: boolean
+}
+```
+
+Identique au type `Client` mocké actuel (`lib/clients/types.ts`), à l'exception de `email` qui devient explicitement `string | null` (JSON n'a pas d'`undefined`) au lieu de `email?: string` — le frontend devra traiter `null` comme "absent" au moment de l'intégration (changement mineur, à traiter dans le sous-projet d'intégration frontend, pas ici).
+
+## Découpage de l'implémentation (rappel du mode de livraison)
+
+Comme pour l'API Auth, l'implémentation se fait couche par couche, avec revue de code automatique après chaque étape et validation explicite avant de passer à la suivante :
+
+1. Schéma Prisma (`Client` + migration)
+2. Repository (interface + implémentation Prisma)
+3. Service (règles métier, erreurs de domaine)
+4. Controllers HTTP + routes `app/api/clients/**`
+5. Tests (unitaires services, intégration repository/controllers contre Postgres réel)
+
+L'intégration frontend (`clients-provider.tsx` → vrais appels API) est un sous-projet séparé, à brainstormer une fois ce backend validé.
