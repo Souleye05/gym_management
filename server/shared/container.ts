@@ -16,11 +16,15 @@ import { DefaultRefreshTokenLookupService } from '../auth/services/default-refre
 import type { StaffAuthService } from '../auth/services/staff-auth.service'
 import type { ClientAuthService } from '../auth/services/client-auth.service'
 import type { RefreshTokenLookupService } from '../auth/services/refresh-token-lookup.service'
+import { PrismaClientRepository } from '../clients/infrastructure/prisma-client.repository'
+import { DefaultClientService } from '../clients/services/default-client.service'
+import type { ClientService } from '../clients/services/client.service'
 
 export type Container = {
   staffAuthService: StaffAuthService
   clientAuthService: ClientAuthService
   refreshTokenLookupService: RefreshTokenLookupService
+  clientService: ClientService
 }
 
 function createContainer(): Container {
@@ -64,7 +68,10 @@ function createContainer(): Container {
     otpRateLimitService,
   )
 
-  return { staffAuthService, clientAuthService, refreshTokenLookupService }
+  const clientRepository = new PrismaClientRepository(prismaClient)
+  const clientService = new DefaultClientService(clientRepository)
+
+  return { staffAuthService, clientAuthService, refreshTokenLookupService, clientService }
 }
 
 declare global {
