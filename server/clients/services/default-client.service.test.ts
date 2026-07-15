@@ -130,6 +130,16 @@ describe('DefaultClientService.findByCardNumber', () => {
 
     expect(found).toBeNull()
   })
+
+  it('returns null when the matching client is deactivated', async () => {
+    const deactivated: Client = { ...CLIENT, isActive: false }
+    const repository = fakeClientRepository({ findByCardSequence: async (sequence) => (sequence === 1 ? deactivated : null) })
+    const service = new DefaultClientService(repository)
+
+    const found = await service.findByCardNumber('CARD-00001')
+
+    expect(found).toBeNull()
+  })
 })
 
 describe('DefaultClientService.updateClient', () => {
@@ -174,6 +184,17 @@ describe('DefaultClientService.updateClient', () => {
 
     expect(result.ok).toBe(true)
   })
+
+  it('returns not-found when the client exists but is deactivated', async () => {
+    const deactivated: Client = { ...CLIENT, isActive: false }
+    const repository = fakeClientRepository({ findById: async (id) => (id === deactivated.id ? deactivated : null) })
+    const service = new DefaultClientService(repository)
+
+    const result = await service.updateClient('c1', { name: 'New Name' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('not-found')
+  })
 })
 
 describe('DefaultClientService.deactivateClient', () => {
@@ -189,6 +210,17 @@ describe('DefaultClientService.deactivateClient', () => {
     const service = new DefaultClientService(fakeClientRepository())
 
     const result = await service.deactivateClient('missing')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('not-found')
+  })
+
+  it('returns not-found when deactivating an already-deactivated client', async () => {
+    const deactivated: Client = { ...CLIENT, isActive: false }
+    const repository = fakeClientRepository({ findById: async (id) => (id === deactivated.id ? deactivated : null) })
+    const service = new DefaultClientService(repository)
+
+    const result = await service.deactivateClient('c1')
 
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('not-found')

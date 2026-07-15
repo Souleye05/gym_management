@@ -64,13 +64,16 @@ export class DefaultClientService implements ClientService {
   async findByCardNumber(cardNumber: string): Promise<Client | null> {
     const sequence = parseCardNumber(cardNumber)
     if (sequence === null) return null
-    return guardAgainstLeakingInternals(() => this.clientRepository.findByCardSequence(sequence))
+    return guardAgainstLeakingInternals(async () => {
+      const client = await this.clientRepository.findByCardSequence(sequence)
+      return client && client.isActive ? client : null
+    })
   }
 
   async updateClient(id: string, input: UpdateClientDto): Promise<Result<Client, ClientDomainError>> {
     return guardAgainstLeakingInternals(async () => {
       const existing = await this.clientRepository.findById(id)
-      if (!existing) return err(NOT_FOUND)
+      if (!existing || !existing.isActive) return err(NOT_FOUND)
 
       if (input.phone && input.phone !== existing.phone) {
         const phoneOwner = await this.clientRepository.findByPhone(input.phone, { activeOnly: true })
@@ -85,7 +88,7 @@ export class DefaultClientService implements ClientService {
   async deactivateClient(id: string): Promise<Result<void, ClientDomainError>> {
     return guardAgainstLeakingInternals(async () => {
       const existing = await this.clientRepository.findById(id)
-      if (!existing) return err(NOT_FOUND)
+      if (!existing || !existing.isActive) return err(NOT_FOUND)
 
       await this.clientRepository.deactivate(id)
       return ok(undefined)
