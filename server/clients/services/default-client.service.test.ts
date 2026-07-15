@@ -86,6 +86,17 @@ describe('DefaultClientService.getClient', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('not-found')
   })
+
+  it('returns not-found when the client exists but is deactivated', async () => {
+    const deactivated: Client = { ...CLIENT, isActive: false }
+    const repository = fakeClientRepository({ findById: async (id) => (id === deactivated.id ? deactivated : null) })
+    const service = new DefaultClientService(repository)
+
+    const result = await service.getClient('c1')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('not-found')
+  })
 })
 
 describe('DefaultClientService.listClients', () => {
