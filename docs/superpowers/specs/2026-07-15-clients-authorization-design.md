@@ -52,6 +52,28 @@ findActiveById(id: string): Promise<StaffAccountRecord | null>  // null si absen
 ```
 Implémentation Prisma : `findFirst({ where: { id, isActive: true } })`. Encapsule le filtre d'activité dans le Repository, comme demandé — le helper HTTP ne connaît que "trouvé ou pas trouvé".
 
+### 1bis. `requireClientAuth()` — symétrique côté client
+
+Nouveau fichier `server/auth/http/require-client-auth.ts`. Contrairement au staff, la logique de vérification complète (JWT + rechargement + `isActive`) existe déjà côté service — `clientAuthService.getMe()` (`server/auth/services/default-client-auth.service.ts:116-129`) fait exactement ce travail et retourne un `Result<ClientUser, AuthDomainError>`. `requireClientAuth()` est donc un wrapper HTTP fin autour de ce service, pas une réimplémentation via le Repository (pas de nouvelle méthode `ClientAccountRepository.findActiveById` nécessaire) :
+
+```ts
+export type RequireClientAuthResult =
+  | { ok: true; client: ClientUser }
+  | { ok: false; response: NextResponse }
+
+export async function requireClientAuth(req: NextRequest): Promise<RequireClientAuthResult>
+```
+
+Logique interne : `readAccessTokenCookie(req)` → si absent, `{ ok: false, response: 401 session-expired }` → `clientAuthService.getMe(token)` → si `!ok`, `{ ok: false, response: NextResponse.json(apiFailureFromDomainError(result.error), { status: statusForDomainError(result.error) }) }` → sinon `{ ok: true, client: result.value }`.
+
+Même ergonomie d'appel que `requireStaffAuth()` :
+```ts
+const auth = await requireClientAuth(req)
+if (!auth.ok) return auth.response
+```
+
+**`client-me.controller.ts` migre vers ce helper** — il duplique aujourd'hui exactement cette logique inline ; ce chantier l'élimine en même temps qu'il évite d'introduire une nouvelle duplication dans `get-my-client-profile.controller.ts`. Comportement HTTP inchangé (mêmes codes, mêmes messages), seule l'organisation du code change.
+
 ### 2. Permissions — matrice par rôle
 
 Nouveau fichier `server/shared/authorization/permissions.ts` (transverse, pas scopé à un domaine — appelé à grandir avec d'autres modules et rôles) :
@@ -91,19 +113,14 @@ if (!hasPermission(auth.staff.role, 'client:deactivate')) {
 
 ### 4. `GET /api/client/me/profile` — endpoint self-service
 
-Nouveau fichier `server/clients/http/get-my-client-profile.controller.ts`. Réutilise le pattern déjà présent dans `client-me.controller.ts` pour identifier le `ClientAccount` connecté :
+Nouveau fichier `server/clients/http/get-my-client-profile.controller.ts`. Utilise `requireClientAuth()` (§1bis) pour identifier le `ClientAccount` connecté :
 
 ```ts
-const accessToken = readAccessTokenCookie(req)
-if (!accessToken) return 401 session-expired
+const auth = await requireClientAuth(req)
+if (!auth.ok) return auth.response
 
-const { clientAuthService, clientService } = getContainer()
-const meResult = await clientAuthService.getMe(accessToken)
-if (!meResult.ok) {
-  return NextResponse.json(apiFailureFromDomainError(meResult.error), { status: statusForDomainError(meResult.error) })
-}
-
-const client = await clientService.findByClientAccountId(meResult.value.id)
+const { clientService } = getContainer()
+const client = await clientService.findByClientAccountId(auth.client.id)
 return NextResponse.json(apiSuccess({ client }))  // client peut être null — toujours 200
 ```
 
@@ -131,9 +148,11 @@ Aucun changement de contrat pour les réponses de succès déjà existantes — 
 ## Tests
 
 - `require-staff-auth.test.ts` : pas de cookie, JWT invalide, `kind !== 'staff'`, compte introuvable, compte désactivé (`findActiveById` retourne `null`), compte actif → `AuthenticatedStaff` correct.
+- `require-client-auth.test.ts` : pas de cookie, `clientAuthService.getMe()` en échec (JWT invalide, `kind !== 'client'`, compte désactivé) → `response` correspondant, `getMe()` en succès → `ClientUser` correct.
 - `permissions.test.ts` : matrice complète (`ADMIN`/`AGENT` × les 5 permissions), fonction pure sans dépendance.
 - Chaque controller Clients protégé (5) : test 401 sans cookie (nouveau test ajouté aux fichiers de test existants).
 - `deactivate-client.controller.test.ts` : test 403 avec un staff `AGENT`, test 200 inchangé avec un staff `ADMIN`.
+- `client-me.controller.test.ts` : migration vers `requireClientAuth()` — tests existants (200 avec session valide, 401 sans cookie, 401 JWT malformé) doivent continuer à passer sans modification, garantissant que le comportement HTTP est inchangé après le refactor.
 - `get-my-client-profile.controller.test.ts` (nouveau) : 401 sans session, 200 `{ client: null }` avec session valide sans lien, 200 `{ client: {...} }` avec session valide et lien.
 - `prisma-staff-account.repository.test.ts` : cas ajoutés pour `findActiveById` (trouvé actif, trouvé mais inactif → `null`, introuvable → `null`).
 - `prisma-client.repository.test.ts` : cas ajoutés pour `findByClientAccountId` (trouvé, introuvable → `null`).
