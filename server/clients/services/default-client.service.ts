@@ -45,7 +45,7 @@ export class DefaultClientService implements ClientService {
   async getClient(id: string): Promise<Result<Client, ClientDomainError>> {
     return guardAgainstLeakingInternals(async () => {
       const client = await this.clientRepository.findById(id)
-      if (!client) return err(NOT_FOUND)
+      if (!client || !client.isActive) return err(NOT_FOUND)
       return ok(client)
     })
   }
