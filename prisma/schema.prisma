@@ -53,8 +53,27 @@ model ClientAccount {
   otpCodes      OtpCode[]
   refreshTokens RefreshToken[]
   loginLogs     LoginLog[]
+  client        Client?
 
   @@map("client_accounts")
+}
+
+model Client {
+  id              String    @id @default(cuid())
+  clientAccountId String?   @unique
+  cardSequence    Int       @unique @default(autoincrement())
+  name            String
+  phone           String
+  email           String?
+  isActive        Boolean   @default(true)
+  deletedAt       DateTime?
+  joinedAt        DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id], onDelete: SetNull)
+
+  @@index([phone, isActive])
+  @@map("clients")
 }
 
 model RefreshToken {
