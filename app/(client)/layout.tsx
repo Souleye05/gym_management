@@ -1,9 +1,10 @@
 // app/(client)/layout.tsx
 'use client'
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Dumbbell, LogOut } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { MyProfileProvider } from '@/components/providers/my-profile-provider'
 import { useAuth } from '@/components/providers/user-provider'
@@ -11,6 +12,7 @@ import { useAuth } from '@/components/providers/user-provider'
 function ClientGuard({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { session, status, logout } = useAuth()
+  const [queryClient] = useState(() => new QueryClient())
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -40,22 +42,24 @@ function ClientGuard({ children }: { children: ReactNode }) {
   }
 
   return (
-    <MyProfileProvider>
-      <div className="flex min-h-screen flex-col bg-background">
-        <header className="flex h-14 items-center justify-between border-b border-border px-4">
-          <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-brand text-primary-foreground">
-              <Dumbbell className="size-3.5" />
+    <QueryClientProvider client={queryClient}>
+      <MyProfileProvider>
+        <div className="flex min-h-screen flex-col bg-background">
+          <header className="flex h-14 items-center justify-between border-b border-border px-4">
+            <div className="flex items-center gap-2">
+              <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-brand text-primary-foreground">
+                <Dumbbell className="size-3.5" />
+              </div>
+              <span className="text-sm font-semibold tracking-tight">Atlas</span>
             </div>
-            <span className="text-sm font-semibold tracking-tight">Atlas</span>
-          </div>
-          <Button variant="ghost" size="icon" aria-label="Déconnexion" onClick={handleLogout}>
-            <LogOut className="size-4" />
-          </Button>
-        </header>
-        <main className="flex flex-1 flex-col gap-4 p-4">{children}</main>
-      </div>
-    </MyProfileProvider>
+            <Button variant="ghost" size="icon" aria-label="Déconnexion" onClick={handleLogout}>
+              <LogOut className="size-4" />
+            </Button>
+          </header>
+          <main className="flex flex-1 flex-col gap-4 p-4">{children}</main>
+        </div>
+      </MyProfileProvider>
+    </QueryClientProvider>
   )
 }
 
