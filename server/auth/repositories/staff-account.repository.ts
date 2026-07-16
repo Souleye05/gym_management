@@ -12,4 +12,6 @@ export type StaffAccountRecord = {
 export interface StaffAccountRepository {
   findByEmail(email: string): Promise<StaffAccountRecord | null>
   findById(id: string): Promise<StaffAccountRecord | null>
+  /** Returns null if the account does not exist OR is deactivated (isActive: false). */
+  findActiveById(id: string): Promise<StaffAccountRecord | null>
 }

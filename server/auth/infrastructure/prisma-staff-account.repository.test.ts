@@ -40,4 +40,29 @@ describe('PrismaStaffAccountRepository', () => {
     const account = await repository.findById('does-not-exist')
     expect(account).toBeNull()
   })
+
+  it('finds an active staff account by id via findActiveById', async () => {
+    const created = await prismaClient.staffAccount.create({
+      data: { email: 'active@atlas.fit', passwordHash: 'hash', name: 'Active Staff', role: 'AGENT' },
+    })
+
+    const account = await repository.findActiveById(created.id)
+
+    expect(account?.email).toBe('active@atlas.fit')
+  })
+
+  it('returns null from findActiveById when the account is deactivated', async () => {
+    const created = await prismaClient.staffAccount.create({
+      data: { email: 'inactive@atlas.fit', passwordHash: 'hash', name: 'Inactive Staff', role: 'AGENT', isActive: false },
+    })
+
+    const account = await repository.findActiveById(created.id)
+
+    expect(account).toBeNull()
+  })
+
+  it('returns null from findActiveById when the id does not exist', async () => {
+    const account = await repository.findActiveById('does-not-exist')
+    expect(account).toBeNull()
+  })
 })

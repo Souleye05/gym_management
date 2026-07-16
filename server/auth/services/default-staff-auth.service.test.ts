@@ -27,6 +27,7 @@ function fakeStaffAccountRepository(account: StaffAccountRecord | null = ACCOUNT
   return {
     findByEmail: async (email) => (account && account.email === email ? account : null),
     findById: async (id) => (account && account.id === id ? account : null),
+    findActiveById: async (id) => (account && account.id === id && account.isActive ? account : null),
   }
 }
 

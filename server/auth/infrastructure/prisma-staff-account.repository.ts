@@ -11,4 +11,8 @@ export class PrismaStaffAccountRepository implements StaffAccountRepository {
   async findById(id: string): Promise<StaffAccountRecord | null> {
     return this.prisma.staffAccount.findUnique({ where: { id } })
   }
+
+  async findActiveById(id: string): Promise<StaffAccountRecord | null> {
+    return this.prisma.staffAccount.findFirst({ where: { id, isActive: true } })
+  }
 }
