@@ -1,4 +1,5 @@
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { ClientStatusBadge } from '@/components/clients/client-status-badge'
 import type { ClientStatus } from '@/lib/clients/types'
 import type { Subscription } from '@/lib/subscriptions/types'
@@ -12,15 +13,20 @@ export function SubscriptionStatusSection({
   name,
   status,
   subscription,
+  demo,
 }: {
   name: string
   status: ClientStatus
   subscription: Subscription | undefined
+  demo?: boolean
 }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-2 pt-5">
-        <h1 className="text-lg font-semibold tracking-tight">{name}</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold tracking-tight">{name}</h1>
+          {demo && <Badge variant="muted">Démo</Badge>}
+        </div>
         <div className="flex items-center gap-2">
           <ClientStatusBadge status={status} />
           {status === 'expiring' && subscription && (

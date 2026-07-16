@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { LucideIcon } from 'lucide-react'
 
@@ -13,19 +14,22 @@ export function HistoryList({
   title,
   rows,
   emptyMessage,
+  demo,
 }: {
   icon: LucideIcon
   title: string
   rows: HistoryRow[]
   emptyMessage: string
+  demo?: boolean
 }) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <Icon className="size-4" />
           {title}
         </CardTitle>
+        {demo && <Badge variant="muted">Démo</Badge>}
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
