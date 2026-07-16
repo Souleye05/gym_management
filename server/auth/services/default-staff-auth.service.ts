@@ -86,8 +86,8 @@ export class DefaultStaffAuthService implements StaffAuthService {
       return err({ code: 'session-expired', message: 'Session expirée.' })
     }
 
-    const account = await this.staffAccountRepository.findById(payload.value.sub)
-    if (!account || !account.isActive) {
+    const account = await this.staffAccountRepository.findActiveById(payload.value.sub)
+    if (!account) {
       return err({ code: 'account-inactive', message: 'Compte désactivé.' })
     }
 
@@ -99,8 +99,8 @@ export class DefaultStaffAuthService implements StaffAuthService {
       return err({ code: 'invalid-refresh-token', message: 'Session expirée.' })
     }
 
-    const account = await this.staffAccountRepository.findById(record.staffAccountId)
-    if (!account || !account.isActive) {
+    const account = await this.staffAccountRepository.findActiveById(record.staffAccountId)
+    if (!account) {
       return err({ code: 'account-inactive', message: 'Compte désactivé.' })
     }
 

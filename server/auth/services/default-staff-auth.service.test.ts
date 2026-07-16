@@ -253,6 +253,23 @@ describe('DefaultStaffAuthService.getMe', () => {
 
     expect(result.ok).toBe(false)
   })
+
+  it('rejects a valid token for a deactivated account', async () => {
+    const service = new DefaultStaffAuthService(
+      fakeStaffAccountRepository({ ...ACCOUNT, isActive: false }),
+      fakeRefreshTokenRepository().repository,
+      fakeLoginAttemptRepository().repository,
+      fakeLoginLogRepository().repository,
+      fakePasswordService(true),
+      fakeTokenService(),
+      allowingRateLimit(),
+    )
+
+    const result = await service.getMe('access-s1')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('account-inactive')
+  })
 })
 
 describe('DefaultStaffAuthService.refresh', () => {
