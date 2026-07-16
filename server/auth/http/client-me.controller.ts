@@ -1,23 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { apiFailureFromDomainError, apiSuccess } from '../../shared/api-response'
-import { readAccessTokenCookie } from '../../shared/cookies'
-import { statusForDomainError } from '../../shared/http-status'
-import { getContainer } from '../../shared/container'
+import { apiSuccess } from '../../shared/api-response'
+import { requireClientAuth } from './require-client-auth'
 
 export async function clientMeController(req: NextRequest): Promise<NextResponse> {
-  const accessToken = readAccessTokenCookie(req)
-  if (!accessToken) {
-    return NextResponse.json(apiFailureFromDomainError({ code: 'session-expired', message: 'Session expirée.' }), {
-      status: 401,
-    })
-  }
+  const auth = await requireClientAuth(req)
+  if (!auth.ok) return auth.response
 
-  const { clientAuthService } = getContainer()
-  const result = await clientAuthService.getMe(accessToken)
-
-  if (!result.ok) {
-    return NextResponse.json(apiFailureFromDomainError(result.error), { status: statusForDomainError(result.error) })
-  }
-
-  return NextResponse.json(apiSuccess({ user: result.value }))
+  return NextResponse.json(apiSuccess({ user: auth.client }))
 }
