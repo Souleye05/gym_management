@@ -2,6 +2,7 @@
 'use client'
 
 import { CalendarClock, Receipt } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { DigitalCardSection } from '@/components/client-portal/digital-card-section'
 import { HistoryList, type HistoryRow } from '@/components/client-portal/history-list'
 import { SubscriptionStatusSection } from '@/components/client-portal/subscription-status-section'
@@ -43,15 +44,38 @@ function byMostRecent<T>(items: T[], isoDateOf: (item: T) => string): T[] {
 }
 
 export default function ClientHomePage() {
-  const { profile, status } = useMyProfile()
+  const state = useMyProfile()
 
-  if (status === 'loading') {
+  if (state.status === 'loading') {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-muted-foreground">Chargement…</p>
       </div>
     )
   }
+
+  if (state.status === 'error') {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-muted-foreground">Impossible de charger votre profil.</p>
+        <Button variant="outline" onClick={state.retry}>
+          Réessayer
+        </Button>
+      </div>
+    )
+  }
+
+  if (state.status === 'no-profile') {
+    return (
+      <div className="flex flex-1 items-center justify-center text-center">
+        <p className="text-sm text-muted-foreground">
+          Votre compte n'est pas encore relié à une fiche client. Contactez l'accueil.
+        </p>
+      </div>
+    )
+  }
+
+  const { profile } = state
 
   // Combine both mocked history types, tagging each with its real ISO timestamp so the
   // merged list can be sorted chronologically (a plain concat of two independently-sorted
@@ -72,6 +96,7 @@ export default function ClientHomePage() {
         name={profile.client.name}
         status={profile.subscriptionStatus}
         subscription={profile.subscription}
+        demo
       />
       <DigitalCardSection cardNumber={profile.client.cardNumber} />
       <HistoryList
@@ -79,12 +104,14 @@ export default function ClientHomePage() {
         title="Historique paiements"
         rows={paymentHistoryRows}
         emptyMessage="Aucun historique pour l'instant."
+        demo
       />
       <HistoryList
         icon={CalendarClock}
         title="Historique séances"
         rows={sessionHistoryRows}
         emptyMessage="Aucune séance pour l'instant."
+        demo
       />
     </div>
   )
