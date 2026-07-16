@@ -3,8 +3,12 @@ import { apiSuccess } from '../../shared/api-response'
 import { apiFailureFromClientDomainError, statusForClientDomainError } from '../../shared/client-api-response'
 import { getContainer } from '../../shared/container'
 import { withInternalErrorHandling } from '../../shared/with-internal-error-handling'
+import { requireStaffAuth } from '../../auth/http/require-staff-auth'
 
 export async function getClientController(req: NextRequest, id: string): Promise<NextResponse> {
+  const auth = await requireStaffAuth(req)
+  if (!auth.ok) return auth.response
+
   return withInternalErrorHandling(async () => {
     const { clientService } = getContainer()
     const result = await clientService.getClient(id)

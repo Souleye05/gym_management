@@ -1,23 +1,61 @@
+// server/clients/http/create-client.controller.test.ts
 import { NextRequest } from 'next/server'
+import argon2 from 'argon2'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { prismaClient } from '../../shared/prisma-client'
+import { cleanAuthTables } from '../../auth/infrastructure/test-helpers/clean-db'
+import { staffLoginController } from '../../auth/http/staff-login.controller'
 import { cleanClientsTable } from '../infrastructure/test-helpers/clean-clients-table'
 import { createClientController } from './create-client.controller'
 
-function postRequest(body: unknown): NextRequest {
-  return new NextRequest('https://example.com/api/clients', {
+async function staffAccessTokenCookie(): Promise<string> {
+  const passwordHash = await argon2.hash('admin123')
+  await prismaClient.staffAccount.upsert({
+    where: { email: 'admin@atlas.fit' },
+    update: {},
+    create: { email: 'admin@atlas.fit', passwordHash, name: 'Admin Studio', role: 'ADMIN' },
+  })
+  const req = new NextRequest('https://example.com/api/auth/staff/login', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'admin@atlas.fit', password: 'admin123' }),
+  })
+  const res = await staffLoginController(req)
+  const accessToken = res.cookies.get('access_token')?.value
+  if (!accessToken) throw new Error('login did not set an access token cookie')
+  return `access_token=${accessToken}`
+}
+
+function postRequest(body: unknown, cookie: string): NextRequest {
+  return new NextRequest('https://example.com/api/clients', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
     body: JSON.stringify(body),
   })
 }
 
 beforeEach(async () => {
+  await cleanAuthTables()
   await cleanClientsTable()
 })
 
 describe('createClientController', () => {
+  it('returns 401 when no staff session is present', async () => {
+    const req = new NextRequest('https://example.com/api/clients', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'No Session', phone: '+33612345699' }),
+    })
+
+    const res = await createClientController(req)
+
+    expect(res.status).toBe(401)
+  })
+
   it('creates a client and returns 201 with a formatted card number', async () => {
-    const res = await createClientController(postRequest({ name: 'Yasmine Kaddour', phone: '+33612345601' }))
+    const cookie = await staffAccessTokenCookie()
+
+    const res = await createClientController(postRequest({ name: 'Yasmine Kaddour', phone: '+33612345601' }, cookie))
     const json = await res.json()
 
     expect(res.status).toBe(201)
@@ -28,15 +66,18 @@ describe('createClientController', () => {
   })
 
   it('returns 400 for an invalid payload', async () => {
-    const res = await createClientController(postRequest({ name: '', phone: '123' }))
+    const cookie = await staffAccessTokenCookie()
+
+    const res = await createClientController(postRequest({ name: '', phone: '123' }, cookie))
 
     expect(res.status).toBe(400)
   })
 
   it('returns 409 when the phone is already used by an active client', async () => {
-    await createClientController(postRequest({ name: 'First', phone: '+33612345601' }))
+    const cookie = await staffAccessTokenCookie()
+    await createClientController(postRequest({ name: 'First', phone: '+33612345601' }, cookie))
 
-    const res = await createClientController(postRequest({ name: 'Second', phone: '+33612345601' }))
+    const res = await createClientController(postRequest({ name: 'Second', phone: '+33612345601' }, cookie))
     const json = await res.json()
 
     expect(res.status).toBe(409)
