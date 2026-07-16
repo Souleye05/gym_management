@@ -72,6 +72,11 @@ model Client {
 
   clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id], onDelete: SetNull)
 
+  // Phone uniqueness among active clients is additionally enforced by a partial unique
+  // index (clients_phone_active_key, UNIQUE ON phone WHERE "isActive" = true) applied via
+  // migration 20260716074516_add_client_phone_active_unique_index. Prisma's schema DSL has
+  // no native syntax for filtered/partial unique indexes, so it is not declared here — do
+  // not let a future `prisma migrate dev` diff drop it; hand-verify the drift check output.
   @@index([phone, isActive])
   @@map("clients")
 }

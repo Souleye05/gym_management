@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ok } from '../../shared/result'
 import type { Client } from '../domain/entities'
-import type {
-  ClientRepository,
-  CreateClientInput,
-  FindByPhoneOptions,
-  UpdateClientInput,
+import {
+  PhoneAlreadyUsedError,
+  type ClientRepository,
+  type CreateClientInput,
+  type FindByPhoneOptions,
+  type UpdateClientInput,
 } from '../repositories/client.repository'
 import { DefaultClientService } from './default-client.service'
 
@@ -66,6 +67,20 @@ describe('DefaultClientService.createClient', () => {
     await service.createClient({ name: 'Test', phone: '+33612345601' })
 
     expect(calls).toEqual([{ activeOnly: true }])
+  })
+
+  it('translates a PhoneAlreadyUsedError from a concurrent create into phone-already-used, not internal-error', async () => {
+    const repository = fakeClientRepository({
+      create: async () => {
+        throw new PhoneAlreadyUsedError()
+      },
+    })
+    const service = new DefaultClientService(repository)
+
+    const result = await service.createClient({ name: 'Racer', phone: '+33612345601' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('phone-already-used')
   })
 })
 
@@ -187,6 +202,20 @@ describe('DefaultClientService.updateClient', () => {
     const otherClient: Client = { ...CLIENT, id: 'c2', phone: '+33612345699' }
     const repository = fakeClientRepository({
       findByPhone: async (phone) => (phone === '+33612345699' ? otherClient : null),
+    })
+    const service = new DefaultClientService(repository)
+
+    const result = await service.updateClient('c1', { phone: '+33612345699' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('phone-already-used')
+  })
+
+  it('translates a PhoneAlreadyUsedError from a concurrent update into phone-already-used, not internal-error', async () => {
+    const repository = fakeClientRepository({
+      update: async () => {
+        throw new PhoneAlreadyUsedError()
+      },
     })
     const service = new DefaultClientService(repository)
 

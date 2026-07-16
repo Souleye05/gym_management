@@ -1,5 +1,19 @@
 import type { Client } from '../domain/entities'
 
+/**
+ * Thrown by `create`/`update` when the database's own uniqueness enforcement (a partial
+ * unique index scoped to active clients) rejects a phone number already in use by another
+ * active client. This is the race-condition safety net behind the service-level
+ * `findByPhone` pre-check — implementations must throw this specific type (never a raw
+ * driver/ORM error) so callers can distinguish it from a genuinely unexpected failure.
+ */
+export class PhoneAlreadyUsedError extends Error {
+  constructor() {
+    super('phone-already-used')
+    this.name = 'PhoneAlreadyUsedError'
+  }
+}
+
 export type CreateClientInput = {
   name: string
   phone: string

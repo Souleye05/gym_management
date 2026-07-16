@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { prismaClient } from '../../shared/prisma-client'
+import { PhoneAlreadyUsedError } from '../repositories/client.repository'
 import { cleanClientsTable } from './test-helpers/clean-clients-table'
 import { PrismaClientRepository } from './prisma-client.repository'
 
@@ -31,6 +32,25 @@ describe('PrismaClientRepository.create', () => {
     const second = await repository.create({ name: 'Client B', phone: '+33600000002' })
 
     expect(first.cardNumber).not.toBe(second.cardNumber)
+  })
+
+  it('rejects the loser of two concurrent creates with the same phone via PhoneAlreadyUsedError', async () => {
+    const phone = '+33600000099'
+
+    const results = await Promise.allSettled([
+      repository.create({ name: 'Racer A', phone }),
+      repository.create({ name: 'Racer B', phone }),
+    ])
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled')
+    const rejected = results.filter((r) => r.status === 'rejected')
+
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(PhoneAlreadyUsedError)
+
+    const allWithPhone = await prismaClient.client.findMany({ where: { phone, isActive: true } })
+    expect(allWithPhone).toHaveLength(1)
   })
 })
 

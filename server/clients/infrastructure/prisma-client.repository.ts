@@ -1,12 +1,26 @@
-import type { PrismaClient as PrismaClientType } from '../../../lib/generated/prisma/client'
+import { Prisma, type PrismaClient as PrismaClientType } from '../../../lib/generated/prisma/client'
 import type { Client } from '../domain/entities'
-import type {
-  ClientRepository,
-  CreateClientInput,
-  FindByPhoneOptions,
-  UpdateClientInput,
+import {
+  PhoneAlreadyUsedError,
+  type ClientRepository,
+  type CreateClientInput,
+  type FindByPhoneOptions,
+  type UpdateClientInput,
 } from '../repositories/client.repository'
 import { formatCardNumber } from './format-card-number'
+
+/**
+ * True if `error` is a unique-constraint violation (Prisma P2002) from `create`/`update`
+ * below. Prisma's engine cannot report which constraint fired for a hand-written partial
+ * index — it wasn't declared via `@unique`, so `error.meta.target` comes back empty — so
+ * this cannot inspect the constraint name. It doesn't need to: `create`/`update`'s inputs
+ * (`CreateClientInput`/`UpdateClientInput`) never set `clientAccountId` or `cardSequence`,
+ * the only other unique-constrained columns on `Client`, so within these two methods a
+ * P2002 can only ever be the `clients_phone_active_key` partial index.
+ */
+function isPhoneActiveUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+}
 
 type PrismaClientRow = {
   id: string
@@ -34,10 +48,15 @@ export class PrismaClientRepository implements ClientRepository {
   constructor(private readonly prisma: PrismaClientType) {}
 
   async create(input: CreateClientInput): Promise<Client> {
-    const row = await this.prisma.client.create({
-      data: { name: input.name, phone: input.phone, email: input.email ?? null },
-    })
-    return toDomain(row)
+    try {
+      const row = await this.prisma.client.create({
+        data: { name: input.name, phone: input.phone, email: input.email ?? null },
+      })
+      return toDomain(row)
+    } catch (error) {
+      if (isPhoneActiveUniqueViolation(error)) throw new PhoneAlreadyUsedError()
+      throw error
+    }
   }
 
   async findById(id: string): Promise<Client | null> {
@@ -78,11 +97,16 @@ export class PrismaClientRepository implements ClientRepository {
   }
 
   async update(id: string, input: UpdateClientInput): Promise<Client> {
-    const row = await this.prisma.client.update({
-      where: { id },
-      data: input,
-    })
-    return toDomain(row)
+    try {
+      const row = await this.prisma.client.update({
+        where: { id },
+        data: input,
+      })
+      return toDomain(row)
+    } catch (error) {
+      if (isPhoneActiveUniqueViolation(error)) throw new PhoneAlreadyUsedError()
+      throw error
+    }
   }
 
   async deactivate(id: string): Promise<void> {

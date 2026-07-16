@@ -2,7 +2,7 @@ import { err, ok, type Result } from '../../shared/result'
 import type { Client } from '../domain/entities'
 import type { ClientDomainError } from '../domain/errors'
 import type { CreateClientDto, UpdateClientDto } from '../dto/client.dto'
-import type { ClientRepository } from '../repositories/client.repository'
+import { PhoneAlreadyUsedError, type ClientRepository } from '../repositories/client.repository'
 import { parseCardNumber } from '../infrastructure/format-card-number'
 import type { ClientService } from './client.service'
 
@@ -37,8 +37,18 @@ export class DefaultClientService implements ClientService {
       const existing = await this.clientRepository.findByPhone(input.phone, { activeOnly: true })
       if (existing) return err(PHONE_ALREADY_USED)
 
-      const client = await this.clientRepository.create(input)
-      return ok(client)
+      // The findByPhone check above is a fast pre-check, not the enforcement mechanism — two
+      // concurrent requests can both pass it before either commits. The database's own partial
+      // unique index is what actually closes that race; PhoneAlreadyUsedError is how the
+      // repository reports losing it, translated here into the same domain error the pre-check
+      // produces so callers see one consistent 409, not an occasional raw 500.
+      try {
+        const client = await this.clientRepository.create(input)
+        return ok(client)
+      } catch (cause) {
+        if (cause instanceof PhoneAlreadyUsedError) return err(PHONE_ALREADY_USED)
+        throw cause
+      }
     })
   }
 
@@ -84,8 +94,14 @@ export class DefaultClientService implements ClientService {
         if (phoneOwner) return err(PHONE_ALREADY_USED)
       }
 
-      const updated = await this.clientRepository.update(id, input)
-      return ok(updated)
+      // Same race-safety net as createClient — see its comment above.
+      try {
+        const updated = await this.clientRepository.update(id, input)
+        return ok(updated)
+      } catch (cause) {
+        if (cause instanceof PhoneAlreadyUsedError) return err(PHONE_ALREADY_USED)
+        throw cause
+      }
     })
   }
 
