@@ -57,6 +57,11 @@ export class PrismaClientRepository implements ClientRepository {
     return row ? toDomain(row) : null
   }
 
+  async findByClientAccountId(clientAccountId: string): Promise<Client | null> {
+    const row = await this.prisma.client.findUnique({ where: { clientAccountId } })
+    return row ? toDomain(row) : null
+  }
+
   async search(query: string): Promise<Client[]> {
     const trimmed = query.trim()
     if (trimmed.length === 0) return []

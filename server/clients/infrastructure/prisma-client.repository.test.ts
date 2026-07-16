@@ -99,6 +99,24 @@ describe('PrismaClientRepository.findByCardSequence', () => {
   })
 })
 
+describe('PrismaClientRepository.findByClientAccountId', () => {
+  it('finds a client linked to the given clientAccountId', async () => {
+    const account = await prismaClient.clientAccount.create({ data: { phone: '+33600000010', name: 'Linked Account' } })
+    const created = await prismaClient.client.create({
+      data: { name: 'Linked Client', phone: '+33600000011', clientAccountId: account.id },
+    })
+
+    const found = await repository.findByClientAccountId(account.id)
+
+    expect(found?.id).toBe(created.id)
+  })
+
+  it('returns null when no client is linked to the given clientAccountId', async () => {
+    const found = await repository.findByClientAccountId('does-not-exist')
+    expect(found).toBeNull()
+  })
+})
+
 describe('PrismaClientRepository.search', () => {
   it('matches by case-insensitive name substring', async () => {
     await repository.create({ name: 'Yasmine Kaddour', phone: '+33612345601' })

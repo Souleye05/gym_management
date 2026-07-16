@@ -23,6 +23,8 @@ export interface ClientRepository {
   findByPhone(phone: string, options: FindByPhoneOptions): Promise<Client | null>
   /** Looks up by the raw card sequence integer (already parsed from "CARD-xxxxx" by the caller). */
   findByCardSequence(sequence: number): Promise<Client | null>
+  /** Looks up the Client linked to a ClientAccount, if any. A ClientAccount links to at most one Client. */
+  findByClientAccountId(clientAccountId: string): Promise<Client | null>
   /** Case-insensitive substring match on name or phone, active clients only. Empty query returns []. */
   search(query: string): Promise<Client[]>
   update(id: string, input: UpdateClientInput): Promise<Client>

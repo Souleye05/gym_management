@@ -25,6 +25,7 @@ function fakeClientRepository(overrides: Partial<ClientRepository> = {}): Client
     findById: async (id) => (id === CLIENT.id ? CLIENT : null),
     findByPhone: async () => null,
     findByCardSequence: async (sequence) => (sequence === 1 ? CLIENT : null),
+    findByClientAccountId: async () => null,
     search: async () => [CLIENT],
     update: async (id, input: UpdateClientInput) => ({ ...CLIENT, ...input }),
     deactivate: async () => {},
@@ -137,6 +138,27 @@ describe('DefaultClientService.findByCardNumber', () => {
     const service = new DefaultClientService(repository)
 
     const found = await service.findByCardNumber('CARD-00001')
+
+    expect(found).toBeNull()
+  })
+})
+
+describe('DefaultClientService.findByClientAccountId', () => {
+  it('delegates to the repository and returns the linked client', async () => {
+    const repository = fakeClientRepository({
+      findByClientAccountId: async (clientAccountId) => (clientAccountId === 'acc-1' ? CLIENT : null),
+    })
+    const service = new DefaultClientService(repository)
+
+    const found = await service.findByClientAccountId('acc-1')
+
+    expect(found?.id).toBe('c1')
+  })
+
+  it('returns null when no client is linked', async () => {
+    const service = new DefaultClientService(fakeClientRepository())
+
+    const found = await service.findByClientAccountId('acc-unknown')
 
     expect(found).toBeNull()
   })

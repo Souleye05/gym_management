@@ -11,6 +11,8 @@ export interface ClientService {
   findByPhone(phone: string): Promise<Client | null>
   /** Accepts a formatted card number (e.g. "CARD-00001"). Returns null if malformed or not found. */
   findByCardNumber(cardNumber: string): Promise<Client | null>
+  /** Looks up the Client linked to a ClientAccount, if any. Returns null if none is linked. */
+  findByClientAccountId(clientAccountId: string): Promise<Client | null>
   updateClient(id: string, input: UpdateClientDto): Promise<Result<Client, ClientDomainError>>
   deactivateClient(id: string): Promise<Result<void, ClientDomainError>>
 }
