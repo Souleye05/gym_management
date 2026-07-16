@@ -177,6 +177,18 @@ describe('DefaultClientService.findByClientAccountId', () => {
 
     expect(found).toBeNull()
   })
+
+  it('returns null when the linked client is deactivated', async () => {
+    const deactivated: Client = { ...CLIENT, isActive: false }
+    const repository = fakeClientRepository({
+      findByClientAccountId: async (clientAccountId) => (clientAccountId === 'acc-1' ? deactivated : null),
+    })
+    const service = new DefaultClientService(repository)
+
+    const found = await service.findByClientAccountId('acc-1')
+
+    expect(found).toBeNull()
+  })
 })
 
 describe('DefaultClientService.updateClient', () => {

@@ -81,7 +81,10 @@ export class DefaultClientService implements ClientService {
   }
 
   async findByClientAccountId(clientAccountId: string): Promise<Client | null> {
-    return guardAgainstLeakingInternals(() => this.clientRepository.findByClientAccountId(clientAccountId))
+    return guardAgainstLeakingInternals(async () => {
+      const client = await this.clientRepository.findByClientAccountId(clientAccountId)
+      return client && client.isActive ? client : null
+    })
   }
 
   async updateClient(id: string, input: UpdateClientDto): Promise<Result<Client, ClientDomainError>> {
