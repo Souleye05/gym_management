@@ -1,3 +1,4 @@
+// prisma/seed.ts
 import { Role } from '../lib/generated/prisma/client'
 import argon2 from 'argon2'
 import { prismaClient as prisma } from '../server/shared/prisma-client'
@@ -7,11 +8,11 @@ const STAFF_SEED = [
   { email: 'agent@atlas.fit', password: 'agent123', name: 'Agent Caisse', role: Role.AGENT },
 ]
 
-const CLIENT_SEED = [
-  { phone: '+33612345601', name: 'Yasmine Kaddour' },
-  { phone: '+33612345602', name: 'Marc Delaunay' },
-  { phone: '+33612345603', name: 'Inès Fabre' },
-  { phone: '+33612345604', name: 'Karim Benali' },
+const CLIENT_ACCOUNT_SEED = [
+  { phone: '+33612345601', name: 'Yasmine Kaddour', linkToClient: true },
+  { phone: '+33612345602', name: 'Marc Delaunay', linkToClient: true },
+  { phone: '+33612345603', name: 'Inès Fabre', linkToClient: true },
+  { phone: '+33612345604', name: 'Karim Benali', linkToClient: false },
 ]
 
 async function main() {
@@ -24,12 +25,21 @@ async function main() {
     })
   }
 
-  for (const client of CLIENT_SEED) {
-    await prisma.clientAccount.upsert({
-      where: { phone: client.phone },
-      update: { name: client.name },
-      create: { phone: client.phone, name: client.name },
+  for (const seed of CLIENT_ACCOUNT_SEED) {
+    const account = await prisma.clientAccount.upsert({
+      where: { phone: seed.phone },
+      update: { name: seed.name },
+      create: { phone: seed.phone, name: seed.name },
     })
+
+    if (seed.linkToClient) {
+      const existingClient = await prisma.client.findUnique({ where: { clientAccountId: account.id } })
+      if (!existingClient) {
+        await prisma.client.create({
+          data: { name: seed.name, phone: seed.phone, clientAccountId: account.id },
+        })
+      }
+    }
   }
 }
 
