@@ -6,6 +6,8 @@ import {
   type ClientRepository,
   type CreateClientInput,
   type FindByPhoneOptions,
+  type ListActivePagination,
+  type ListActiveResult,
   type UpdateClientInput,
 } from '../repositories/client.repository'
 import { DefaultClientService } from './default-client.service'
@@ -28,6 +30,7 @@ function fakeClientRepository(overrides: Partial<ClientRepository> = {}): Client
     findByCardSequence: async (sequence) => (sequence === 1 ? CLIENT : null),
     findByClientAccountId: async () => null,
     search: async () => [CLIENT],
+    listActive: async (_pagination: ListActivePagination): Promise<ListActiveResult> => ({ clients: [CLIENT], total: 1 }),
     update: async (id, input: UpdateClientInput) => ({ ...CLIENT, ...input }),
     deactivate: async () => {},
     ...overrides,

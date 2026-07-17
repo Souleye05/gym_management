@@ -203,3 +203,62 @@ describe('PrismaClientRepository.deactivate', () => {
     expect(found?.isActive).toBe(false)
   })
 })
+
+describe('PrismaClientRepository.listActive', () => {
+  it('returns active clients and the total count', async () => {
+    await repository.create({ name: 'Client A', phone: '+33600000101' })
+    await repository.create({ name: 'Client B', phone: '+33600000102' })
+
+    const result = await repository.listActive({ page: 1, limit: 10 })
+
+    expect(result.clients).toHaveLength(2)
+    expect(result.total).toBe(2)
+  })
+
+  it('excludes deactivated clients from both the list and the total', async () => {
+    const created = await repository.create({ name: 'Will Deactivate', phone: '+33600000103' })
+    await repository.create({ name: 'Stays Active', phone: '+33600000104' })
+    await repository.deactivate(created.id)
+
+    const result = await repository.listActive({ page: 1, limit: 10 })
+
+    expect(result.clients).toHaveLength(1)
+    expect(result.clients[0].name).toBe('Stays Active')
+    expect(result.total).toBe(1)
+  })
+
+  it('respects limit, and total stays independent of it', async () => {
+    for (let i = 0; i < 5; i++) {
+      await repository.create({ name: `Client ${i}`, phone: `+336000002${i}0` })
+    }
+
+    const result = await repository.listActive({ page: 1, limit: 2 })
+
+    expect(result.clients).toHaveLength(2)
+    expect(result.total).toBe(5)
+  })
+
+  it('returns the second page when requested', async () => {
+    const created: string[] = []
+    for (let i = 0; i < 3; i++) {
+      const client = await repository.create({ name: `Page Client ${i}`, phone: `+336000003${i}0` })
+      created.push(client.id)
+    }
+
+    const firstPage = await repository.listActive({ page: 1, limit: 2 })
+    const secondPage = await repository.listActive({ page: 2, limit: 2 })
+
+    expect(firstPage.clients).toHaveLength(2)
+    expect(secondPage.clients).toHaveLength(1)
+    const firstPageIds = firstPage.clients.map((c) => c.id)
+    const secondPageIds = secondPage.clients.map((c) => c.id)
+    expect(firstPageIds).not.toEqual(expect.arrayContaining(secondPageIds))
+  })
+
+  it('returns an empty list and zero total when there are no active clients', async () => {
+    const result = await repository.listActive({ page: 1, limit: 10 })
+
+    expect(result.clients).toEqual([])
+    expect(result.total).toBe(0)
+  })
+})

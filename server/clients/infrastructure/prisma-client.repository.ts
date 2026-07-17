@@ -5,6 +5,8 @@ import {
   type ClientRepository,
   type CreateClientInput,
   type FindByPhoneOptions,
+  type ListActivePagination,
+  type ListActiveResult,
   type UpdateClientInput,
 } from '../repositories/client.repository'
 import { formatCardNumber } from './format-card-number'
@@ -94,6 +96,19 @@ export class PrismaClientRepository implements ClientRepository {
       },
     })
     return rows.map(toDomain)
+  }
+
+  async listActive({ page, limit }: ListActivePagination): Promise<ListActiveResult> {
+    const [rows, total] = await Promise.all([
+      this.prisma.client.findMany({
+        where: { isActive: true },
+        orderBy: { joinedAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.client.count({ where: { isActive: true } }),
+    ])
+    return { clients: rows.map(toDomain), total }
   }
 
   async update(id: string, input: UpdateClientInput): Promise<Client> {

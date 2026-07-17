@@ -14,6 +14,11 @@ export class PhoneAlreadyUsedError extends Error {
   }
 }
 
+export const DEFAULT_LIST_ACTIVE_LIMIT = 100
+
+export type ListActivePagination = { page: number; limit: number }
+export type ListActiveResult = { clients: Client[]; total: number }
+
 export type CreateClientInput = {
   name: string
   phone: string
@@ -41,6 +46,8 @@ export interface ClientRepository {
   findByClientAccountId(clientAccountId: string): Promise<Client | null>
   /** Case-insensitive substring match on name or phone, active clients only. Empty query returns []. */
   search(query: string): Promise<Client[]>
+  /** Active clients only, ordered by joinedAt descending. `total` is a real count, independent of `limit`. */
+  listActive(pagination: ListActivePagination): Promise<ListActiveResult>
   update(id: string, input: UpdateClientInput): Promise<Client>
   /** Soft delete: sets isActive to false and deletedAt to now. */
   deactivate(id: string): Promise<void>
