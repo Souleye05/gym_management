@@ -2,12 +2,19 @@ import type { Result } from '../../shared/result'
 import type { Client } from '../domain/entities'
 import type { ClientDomainError } from '../domain/errors'
 import type { CreateClientDto, UpdateClientDto } from '../dto/client.dto'
+import type { ListActivePagination } from '../repositories/client.repository'
+
+export type ListClientsResult = { clients: Client[]; total?: number }
 
 export interface ClientService {
   createClient(input: CreateClientDto): Promise<Result<Client, ClientDomainError>>
   getClient(id: string): Promise<Result<Client, ClientDomainError>>
-  /** Empty/absent query returns an empty list; otherwise a substring search on name/phone. */
-  listClients(query?: string): Promise<Client[]>
+  /**
+   * Query present → substring search on name/phone, `total` absent (search has no true
+   * pagination — a derived total would misleadingly imply one).
+   * Query absent/empty → all active clients, paginated; `total` present and independent of `limit`.
+   */
+  listClients(query?: string, pagination?: ListActivePagination): Promise<ListClientsResult>
   findByPhone(phone: string): Promise<Client | null>
   /** Accepts a formatted card number (e.g. "CARD-00001"). Returns null if malformed or not found. */
   findByCardNumber(cardNumber: string): Promise<Client | null>

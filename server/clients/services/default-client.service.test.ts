@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ok } from '../../shared/result'
 import type { Client } from '../domain/entities'
 import {
+  DEFAULT_LIST_ACTIVE_LIMIT,
   PhoneAlreadyUsedError,
   type ClientRepository,
   type CreateClientInput,
@@ -119,12 +120,53 @@ describe('DefaultClientService.getClient', () => {
 })
 
 describe('DefaultClientService.listClients', () => {
-  it('returns search results when a query is provided', async () => {
+  it('returns search results with no total when a query is provided', async () => {
     const service = new DefaultClientService(fakeClientRepository())
 
-    const results = await service.listClients('yasmine')
+    const result = await service.listClients('yasmine')
 
-    expect(results).toEqual([CLIENT])
+    expect(result.clients).toEqual([CLIENT])
+    expect(result.total).toBeUndefined()
+  })
+
+  it('delegates to listActive with a real total when no query is provided', async () => {
+    const repository = fakeClientRepository({
+      listActive: async ({ page, limit }) => {
+        expect(page).toBe(1)
+        expect(limit).toBe(DEFAULT_LIST_ACTIVE_LIMIT)
+        return { clients: [CLIENT], total: 1 }
+      },
+    })
+    const service = new DefaultClientService(repository)
+
+    const result = await service.listClients()
+
+    expect(result.clients).toEqual([CLIENT])
+    expect(result.total).toBe(1)
+  })
+
+  it('delegates to listActive with a real total when the query is an empty string', async () => {
+    const repository = fakeClientRepository({
+      listActive: async () => ({ clients: [], total: 0 }),
+    })
+    const service = new DefaultClientService(repository)
+
+    const result = await service.listClients('')
+
+    expect(result.clients).toEqual([])
+    expect(result.total).toBe(0)
+  })
+
+  it('passes explicit pagination through to listActive', async () => {
+    const repository = fakeClientRepository({
+      listActive: async (pagination) => {
+        expect(pagination).toEqual({ page: 2, limit: 5 })
+        return { clients: [], total: 12 }
+      },
+    })
+    const service = new DefaultClientService(repository)
+
+    await service.listClients(undefined, { page: 2, limit: 5 })
   })
 })
 

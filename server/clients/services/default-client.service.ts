@@ -2,9 +2,14 @@ import { err, ok, type Result } from '../../shared/result'
 import type { Client } from '../domain/entities'
 import type { ClientDomainError } from '../domain/errors'
 import type { CreateClientDto, UpdateClientDto } from '../dto/client.dto'
-import { PhoneAlreadyUsedError, type ClientRepository } from '../repositories/client.repository'
+import {
+  DEFAULT_LIST_ACTIVE_LIMIT,
+  PhoneAlreadyUsedError,
+  type ClientRepository,
+  type ListActivePagination,
+} from '../repositories/client.repository'
 import { parseCardNumber } from '../infrastructure/format-card-number'
-import type { ClientService } from './client.service'
+import type { ClientService, ListClientsResult } from './client.service'
 
 const NOT_FOUND: ClientDomainError = { code: 'not-found', message: 'Client introuvable.' }
 const PHONE_ALREADY_USED: ClientDomainError = {
@@ -60,10 +65,13 @@ export class DefaultClientService implements ClientService {
     })
   }
 
-  async listClients(query?: string): Promise<Client[]> {
+  async listClients(query?: string, pagination?: ListActivePagination): Promise<ListClientsResult> {
     return guardAgainstLeakingInternals(async () => {
-      if (!query || query.trim().length === 0) return []
-      return this.clientRepository.search(query)
+      if (query && query.trim().length > 0) {
+        const clients = await this.clientRepository.search(query)
+        return { clients }
+      }
+      return this.clientRepository.listActive(pagination ?? { page: 1, limit: DEFAULT_LIST_ACTIVE_LIMIT })
     })
   }
 
