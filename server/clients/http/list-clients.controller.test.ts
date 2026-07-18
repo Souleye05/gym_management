@@ -51,17 +51,33 @@ describe('listClientsController', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns an empty list with no query params', async () => {
+  it('returns all active clients with a total when no query params are given', async () => {
     const cookie = await staffAccessTokenCookie()
+    await createClientController(postRequest({ name: 'Client One', phone: '+33600000201' }, cookie))
+    await createClientController(postRequest({ name: 'Client Two', phone: '+33600000202' }, cookie))
 
     const res = await listClientsController(listRequest('', cookie))
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.data.clients).toEqual([])
+    expect(json.data.clients).toHaveLength(2)
+    expect(json.data.total).toBe(2)
   })
 
-  it('searches by q', async () => {
+  it('respects page and limit query params', async () => {
+    const cookie = await staffAccessTokenCookie()
+    for (let i = 0; i < 3; i++) {
+      await createClientController(postRequest({ name: `Paged Client ${i}`, phone: `+336000003${i}0` }, cookie))
+    }
+
+    const res = await listClientsController(listRequest('?page=1&limit=2', cookie))
+    const json = await res.json()
+
+    expect(json.data.clients).toHaveLength(2)
+    expect(json.data.total).toBe(3)
+  })
+
+  it('searches by q and omits total', async () => {
     const cookie = await staffAccessTokenCookie()
     await createClientController(postRequest({ name: 'Yasmine Kaddour', phone: '+33612345601' }, cookie))
 
@@ -69,9 +85,10 @@ describe('listClientsController', () => {
     const json = await res.json()
 
     expect(json.data.clients).toHaveLength(1)
+    expect(json.data.total).toBeUndefined()
   })
 
-  it('finds by exact phone', async () => {
+  it('finds by exact phone and omits total', async () => {
     const cookie = await staffAccessTokenCookie()
     await createClientController(postRequest({ name: 'Marc Delaunay', phone: '+33612345602' }, cookie))
 
@@ -80,9 +97,10 @@ describe('listClientsController', () => {
 
     expect(json.data.clients).toHaveLength(1)
     expect(json.data.clients[0].phone).toBe('+33612345602')
+    expect(json.data.total).toBeUndefined()
   })
 
-  it('finds by card number', async () => {
+  it('finds by card number and omits total', async () => {
     const cookie = await staffAccessTokenCookie()
     const createRes = await createClientController(postRequest({ name: 'Inès Fabre', phone: '+33612345603' }, cookie))
     const created = (await createRes.json()).data.client
@@ -92,6 +110,7 @@ describe('listClientsController', () => {
 
     expect(json.data.clients).toHaveLength(1)
     expect(json.data.clients[0].id).toBe(created.id)
+    expect(json.data.total).toBeUndefined()
   })
 
   it('returns an empty list for a card number that does not exist', async () => {
