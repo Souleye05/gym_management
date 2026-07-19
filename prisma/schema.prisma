@@ -38,6 +38,8 @@ model StaffAccount {
   refreshTokens RefreshToken[]
   loginAttempts LoginAttempt[]
   loginLogs     LoginLog[]
+  createdSubscriptions Subscription[]
+  createdSessions      Session[]
 
   @@map("staff_accounts")
 }
@@ -71,6 +73,8 @@ model Client {
   updatedAt       DateTime  @updatedAt
 
   clientAccount ClientAccount? @relation(fields: [clientAccountId], references: [id], onDelete: SetNull)
+  subscriptions Subscription[]
+  sessions      Session[]
 
   // Phone uniqueness among active clients is additionally enforced by a partial unique
   // index (clients_phone_active_key, UNIQUE ON phone WHERE "isActive" = true) applied via
@@ -79,6 +83,66 @@ model Client {
   // not let a future `prisma migrate dev` diff drop it; hand-verify the drift check output.
   @@index([phone, isActive])
   @@map("clients")
+}
+
+enum PlanId {
+  MONTHLY
+  QUARTERLY
+  BIANNUAL
+  ANNUAL
+}
+
+enum SessionType {
+  SUBSCRIBER
+  VISITOR
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE_MONEY
+}
+
+model Subscription {
+  id               String    @id @default(cuid())
+  clientId         String
+  planId           PlanId
+  startDate        DateTime
+  endDate          DateTime
+  suspended        Boolean   @default(false)
+  amountPaid       Int
+  paymentMethod    PaymentMethod
+  createdByStaffId String?
+  createdAt        DateTime  @default(now())
+
+  client         Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdByStaff StaffAccount? @relation(fields: [createdByStaffId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, endDate])
+  @@map("subscriptions")
+}
+
+model Session {
+  id               String        @id @default(cuid())
+  type             SessionType
+  clientId         String?
+  visitorName      String?
+  visitorPhone     String?
+  amountPaid       Int
+  paymentMethod    PaymentMethod
+  createdByStaffId String?
+  checkedInAt      DateTime      @default(now())
+
+  client         Client?       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdByStaff StaffAccount? @relation(fields: [createdByStaffId], references: [id], onDelete: SetNull)
+
+  // SessionType <-> (clientId/visitorName/visitorPhone) consistency is enforced by a
+  // database CHECK constraint (sessions_type_consistency_check), applied via a hand-written
+  // migration since Prisma's DSL cannot express conditional multi-column constraints. See
+  // migration 20260719_add_session_type_consistency_check. Do not let a future
+  // `prisma migrate dev` diff drop it; hand-verify the drift check output.
+  @@index([clientId, checkedInAt])
+  @@map("sessions")
 }
 
 model RefreshToken {
