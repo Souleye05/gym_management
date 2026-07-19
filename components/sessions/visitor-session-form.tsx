@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
+import { PhoneNumberInput } from '@/components/ui/phone-number-input'
 import { PaymentMethodPicker } from './payment-method-picker'
 import type { PaymentMethod } from '@/lib/subscriptions/types'
 
@@ -26,6 +27,10 @@ export function VisitorSessionForm({
       setError('Le nom et le téléphone sont obligatoires.')
       return
     }
+    if (!/^\+\d{8,15}$/.test(phoneNumber.trim())) {
+      setError('Numéro de téléphone invalide.')
+      return
+    }
     setError(null)
     onSubmit({ fullName: fullName.trim(), phoneNumber: phoneNumber.trim(), paymentMethod })
   }
@@ -44,12 +49,7 @@ export function VisitorSessionForm({
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="visitor-phone">Téléphone</Label>
-        <Input
-          id="visitor-phone"
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
-          placeholder="+33…"
-        />
+        <PhoneNumberInput id="visitor-phone" value={phoneNumber} onChange={setPhoneNumber} placeholder="771234567" />
       </div>
       <PaymentMethodPicker value={paymentMethod} onChange={setPaymentMethod} />
       {error && (
