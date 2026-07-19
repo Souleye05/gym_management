@@ -18,9 +18,8 @@ function validate(values: { name: string; phone: string; email: string }): Clien
   if (values.name.trim().length === 0) {
     errors.name = 'Le nom est requis.'
   }
-  const digitCount = values.phone.replace(/\D/g, '').length
-  if (digitCount < 8) {
-    errors.phone = 'Numéro de téléphone invalide.'
+  if (!/^\+\d{8,15}$/.test(values.phone.trim())) {
+    errors.phone = 'Le numéro doit commencer par + et contenir entre 8 et 15 chiffres.'
   }
   if (values.email.trim().length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
     errors.email = 'Adresse e-mail invalide.'
