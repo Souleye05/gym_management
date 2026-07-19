@@ -4,7 +4,8 @@ export type Client = {
   id: string
   name: string
   phone: string
-  email?: string
+  email: string | null
   cardNumber: string
   joinedAt: string
+  isActive: boolean
 }

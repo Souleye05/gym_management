@@ -1,24 +1,19 @@
+import { findClientByCardNumberRequest, fetchClients } from './fetch-clients'
 import type { Client } from './types'
 
-export type ClientRepository = {
-  findByCardNumber(cardNumber: string): Client | undefined
-  search(query: string): Client[]
+export type AsyncClientRepository = {
+  findByCardNumber(cardNumber: string): Promise<Client | undefined>
+  search(query: string): Promise<Client[]>
 }
 
-export function createInMemoryClientRepository(clients: Client[]): ClientRepository {
+export function createApiClientRepository(): AsyncClientRepository {
   return {
-    findByCardNumber: (cardNumber) => {
-      const normalized = cardNumber.trim()
-      return clients.find((c) => c.cardNumber === normalized)
-    },
-    search: (query) => {
-      const normalizedQuery = query.trim().toLowerCase()
+    findByCardNumber: (cardNumber) => findClientByCardNumberRequest(cardNumber.trim()),
+    search: async (query) => {
+      const normalizedQuery = query.trim()
       if (normalizedQuery.length === 0) return []
-      return clients.filter(
-        (client) =>
-          client.name.toLowerCase().includes(normalizedQuery) ||
-          client.phone.toLowerCase().includes(normalizedQuery),
-      )
+      const result = await fetchClients({ q: normalizedQuery })
+      return result.clients
     },
   }
 }
