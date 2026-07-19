@@ -1,8 +1,9 @@
 // app/(staff)/layout.tsx
 'use client'
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { AppShell } from '@/components/shell/app-shell'
 import { ClientsProvider } from '@/components/providers/clients-provider'
 import { SettingsProvider } from '@/components/providers/settings-provider'
@@ -13,6 +14,7 @@ import { useAuth } from '@/components/providers/user-provider'
 function StaffGuard({ children }: { children: ReactNode }) {
   const router = useRouter()
   const { session, status } = useAuth()
+  const [queryClient] = useState(() => new QueryClient())
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -37,15 +39,17 @@ function StaffGuard({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ClientsProvider>
-      <SubscriptionsProvider>
-        <SettingsProvider>
-          <SessionsProvider>
-            <AppShell>{children}</AppShell>
-          </SessionsProvider>
-        </SettingsProvider>
-      </SubscriptionsProvider>
-    </ClientsProvider>
+    <QueryClientProvider client={queryClient}>
+      <ClientsProvider>
+        <SubscriptionsProvider>
+          <SettingsProvider>
+            <SessionsProvider>
+              <AppShell>{children}</AppShell>
+            </SessionsProvider>
+          </SettingsProvider>
+        </SubscriptionsProvider>
+      </ClientsProvider>
+    </QueryClientProvider>
   )
 }
 
