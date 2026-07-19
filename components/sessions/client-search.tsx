@@ -23,6 +23,7 @@ export function ClientSearch({
   useEffect(() => {
     const trimmed = query.trim()
     if (trimmed.length === 0) {
+      ++requestIdRef.current // invalidate any in-flight search so a stale response can't clobber the cleared state
       setResults([])
       setIsSearching(false)
       setSearchError(false)

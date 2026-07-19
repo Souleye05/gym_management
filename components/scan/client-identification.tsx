@@ -30,11 +30,14 @@ export function ClientIdentification({
   const [searchError, setSearchError] = useState(false)
   const [cameraFallback, setCameraFallback] = useState(false)
   const scannerRef = useRef<QrScannerHandle>(null)
+  const requestIdRef = useRef(0)
 
   const resolveCardNumber = useCallback(
     async (cardNumber: string) => {
+      const requestId = ++requestIdRef.current
       try {
         const client = await clientRepository.findByCardNumber(cardNumber)
+        if (requestIdRef.current !== requestId) return // a newer request superseded this one
         if (client) {
           setNotFound(false)
           setSearchError(false)
@@ -45,6 +48,7 @@ export function ClientIdentification({
           scannerRef.current?.reset()
         }
       } catch {
+        if (requestIdRef.current !== requestId) return // a newer request superseded this one
         setNotFound(false)
         setSearchError(true)
         scannerRef.current?.reset()

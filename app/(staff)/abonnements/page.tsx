@@ -4,6 +4,7 @@
 import { Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SubscriptionStatusBadge } from '@/components/subscriptions/subscription-status-badge'
@@ -59,7 +60,7 @@ function SubscriptionRow({
 
 export default function AbonnementsPage() {
   const router = useRouter()
-  const { clients, isLoading } = useClients()
+  const { clients, isLoading, isError, refetch } = useClients()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<SubscriptionStatus | 'all'>('all')
 
@@ -73,6 +74,17 @@ export default function AbonnementsPage() {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-muted-foreground">Impossible de charger la liste des clients.</p>
+        <Button variant="outline" onClick={refetch}>
+          Réessayer
+        </Button>
       </div>
     )
   }

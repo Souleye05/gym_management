@@ -108,23 +108,22 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
 
   const clientRepository = useMemo(() => createApiClientRepository(), [])
 
-  return (
-    <ClientsContext.Provider
-      value={{
-        clients,
-        isLoading: query.isPending,
-        isError: query.isError,
-        refetch: () => query.refetch(),
-        clientRepository,
-        addClient,
-        updateClient,
-        deactivateClient,
-        getClient,
-      }}
-    >
-      {children}
-    </ClientsContext.Provider>
+  const value = useMemo<ClientsContextValue>(
+    () => ({
+      clients,
+      isLoading: query.isPending,
+      isError: query.isError,
+      refetch: query.refetch,
+      clientRepository,
+      addClient,
+      updateClient,
+      deactivateClient,
+      getClient,
+    }),
+    [clients, query.isPending, query.isError, query.refetch, clientRepository, addClient, updateClient, deactivateClient, getClient],
   )
+
+  return <ClientsContext.Provider value={value}>{children}</ClientsContext.Provider>
 }
 
 export function useClients(): ClientsContextValue {

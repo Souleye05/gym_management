@@ -38,7 +38,7 @@ function planLabel(planId: PlanId): string {
 export default function ClientProfilePage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { getClient, updateClient, deactivateClient, isLoading: clientsLoading } = useClients()
+  const { getClient, updateClient, deactivateClient, isLoading: clientsLoading, isError: clientsError, refetch } = useClients()
   const { getCurrentSubscription, getSubscriptionHistory, createSubscription, renewSubscription, suspendSubscription, reactivateSubscription } =
     useSubscriptions()
   const { getSessionsForClient, recordSubscriberSession } = useSessions()
@@ -59,6 +59,17 @@ export default function ClientProfilePage() {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
+
+  if (clientsError) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-muted-foreground">Impossible de charger la liste des clients.</p>
+        <Button variant="outline" onClick={refetch}>
+          Réessayer
+        </Button>
       </div>
     )
   }
@@ -89,6 +100,11 @@ export default function ClientProfilePage() {
       onSuccess: () => setEditOpen(false),
       onError: (message) => setEditError(message),
     })
+  }
+
+  const handleOpenEdit = () => {
+    setEditError(undefined)
+    setEditOpen(true)
   }
 
   const handleOpenDeactivate = () => {
@@ -160,7 +176,7 @@ export default function ClientProfilePage() {
           <div className="flex items-center gap-4">
             <ClientQrCode cardNumber={client.cardNumber} />
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <Button variant="outline" onClick={handleOpenEdit}>
                 <Pencil className="size-4" />
                 Modifier
               </Button>

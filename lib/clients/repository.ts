@@ -8,7 +8,10 @@ export type AsyncClientRepository = {
 
 export function createApiClientRepository(): AsyncClientRepository {
   return {
-    findByCardNumber: (cardNumber) => findClientByCardNumberRequest(cardNumber.trim()),
+    findByCardNumber: (cardNumber) => {
+      const trimmed = cardNumber.trim()
+      return trimmed.length === 0 ? Promise.resolve(undefined) : findClientByCardNumberRequest(trimmed)
+    },
     search: async (query) => {
       const normalizedQuery = query.trim()
       if (normalizedQuery.length === 0) return []

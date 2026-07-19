@@ -10,7 +10,12 @@ export type NewClientInput = { name: string; phone: string; email?: string }
 export type UpdateClientInput = Partial<Pick<Client, 'name' | 'phone' | 'email'>>
 
 async function unwrap<T>(response: Response, fallbackMessage: string): Promise<T> {
-  const envelope: ApiEnvelope<T> = await response.json()
+  let envelope: ApiEnvelope<T>
+  try {
+    envelope = await response.json()
+  } catch {
+    throw new Error(fallbackMessage)
+  }
   if (!envelope.success) {
     throw new Error(envelope.message || fallbackMessage)
   }

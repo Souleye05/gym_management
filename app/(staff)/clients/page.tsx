@@ -85,7 +85,7 @@ export default function ClientsPage() {
         if (requestIdRef.current !== requestId) return
         setSearchError('Erreur de recherche.')
       })
-  }, [clientRepository, query])
+  }, [clientRepository, query, clients])
 
   const queryFiltered = searchResults ?? clients
 

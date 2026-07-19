@@ -99,7 +99,7 @@ function SubscriberEligibilityStep({
 
 export default function SeancesPage() {
   const router = useRouter()
-  const { clients, clientRepository, isLoading } = useClients()
+  const { clients, clientRepository, isLoading, isError, refetch } = useClients()
   const { getSessionsForToday, recordSubscriberSession, recordVisitorSession } = useSessions()
 
   const [subscriberDialogOpen, setSubscriberDialogOpen] = useState(false)
@@ -151,6 +151,17 @@ export default function SeancesPage() {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-muted-foreground">Impossible de charger la liste des clients.</p>
+        <Button variant="outline" onClick={refetch}>
+          Réessayer
+        </Button>
       </div>
     )
   }
