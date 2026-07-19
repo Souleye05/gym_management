@@ -15,6 +15,8 @@ const CLIENT_ACCOUNT_SEED = [
   { phone: '+33612345604', name: 'Karim Benali', linkToClient: false },
 ]
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
 async function main() {
   for (const staff of STAFF_SEED) {
     const passwordHash = await argon2.hash(staff.password)
@@ -25,6 +27,10 @@ async function main() {
     })
   }
 
+  const admin = await prisma.staffAccount.findUniqueOrThrow({ where: { email: 'admin@atlas.fit' } })
+
+  const linkedClients: Record<string, string> = {}
+
   for (const seed of CLIENT_ACCOUNT_SEED) {
     const account = await prisma.clientAccount.upsert({
       where: { phone: seed.phone },
@@ -33,12 +39,112 @@ async function main() {
     })
 
     if (seed.linkToClient) {
-      const existingClient = await prisma.client.findUnique({ where: { clientAccountId: account.id } })
-      if (!existingClient) {
-        await prisma.client.create({
+      let client = await prisma.client.findUnique({ where: { clientAccountId: account.id } })
+      if (!client) {
+        client = await prisma.client.create({
           data: { name: seed.name, phone: seed.phone, clientAccountId: account.id },
         })
       }
+      linkedClients[seed.phone] = client.id
+    }
+  }
+
+  // Yasmine Kaddour: active current subscription + one past subscription + recent sessions.
+  const yasmineId = linkedClients['+33612345601']
+  if (yasmineId) {
+    const hasSubscriptions = await prisma.subscription.findFirst({ where: { clientId: yasmineId } })
+    if (!hasSubscriptions) {
+      await prisma.subscription.create({
+        data: {
+          clientId: yasmineId,
+          planId: 'MONTHLY',
+          startDate: new Date(Date.now() - 120 * DAY_MS),
+          endDate: new Date(Date.now() - 90 * DAY_MS),
+          amountPaid: 40,
+          paymentMethod: 'CASH',
+          createdByStaffId: admin.id,
+        },
+      })
+      await prisma.subscription.create({
+        data: {
+          clientId: yasmineId,
+          planId: 'QUARTERLY',
+          startDate: new Date(Date.now() - 30 * DAY_MS),
+          endDate: new Date(Date.now() + 60 * DAY_MS),
+          amountPaid: 105,
+          paymentMethod: 'CARD',
+          createdByStaffId: admin.id,
+        },
+      })
+      await prisma.session.create({
+        data: {
+          type: 'SUBSCRIBER',
+          clientId: yasmineId,
+          amountPaid: 8,
+          paymentMethod: 'CASH',
+          checkedInAt: new Date(Date.now() - 2 * DAY_MS),
+          createdByStaffId: admin.id,
+        },
+      })
+      await prisma.session.create({
+        data: {
+          type: 'SUBSCRIBER',
+          clientId: yasmineId,
+          amountPaid: 8,
+          paymentMethod: 'CARD',
+          checkedInAt: new Date(Date.now() - 1 * DAY_MS),
+          createdByStaffId: admin.id,
+        },
+      })
+    }
+  }
+
+  // Marc Delaunay: expired subscription only (currentSubscription should resolve to null).
+  const marcId = linkedClients['+33612345602']
+  if (marcId) {
+    const hasSubscriptions = await prisma.subscription.findFirst({ where: { clientId: marcId } })
+    if (!hasSubscriptions) {
+      await prisma.subscription.create({
+        data: {
+          clientId: marcId,
+          planId: 'MONTHLY',
+          startDate: new Date(Date.now() - 60 * DAY_MS),
+          endDate: new Date(Date.now() - 30 * DAY_MS),
+          amountPaid: 40,
+          paymentMethod: 'MOBILE_MONEY',
+          createdByStaffId: admin.id,
+        },
+      })
+      await prisma.session.create({
+        data: {
+          type: 'SUBSCRIBER',
+          clientId: marcId,
+          amountPaid: 8,
+          paymentMethod: 'CASH',
+          checkedInAt: new Date(Date.now() - 35 * DAY_MS),
+          createdByStaffId: admin.id,
+        },
+      })
+    }
+  }
+
+  // Inès Fabre: current subscription but suspended (tests the suspended badge in the portal).
+  const inesId = linkedClients['+33612345603']
+  if (inesId) {
+    const hasSubscriptions = await prisma.subscription.findFirst({ where: { clientId: inesId } })
+    if (!hasSubscriptions) {
+      await prisma.subscription.create({
+        data: {
+          clientId: inesId,
+          planId: 'ANNUAL',
+          startDate: new Date(Date.now() - 30 * DAY_MS),
+          endDate: new Date(Date.now() + 335 * DAY_MS),
+          suspended: true,
+          amountPaid: 350,
+          paymentMethod: 'CARD',
+          createdByStaffId: admin.id,
+        },
+      })
     }
   }
 }
