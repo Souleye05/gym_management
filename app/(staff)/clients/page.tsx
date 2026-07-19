@@ -55,11 +55,12 @@ function StatusFilteredRow({
 
 export default function ClientsPage() {
   const router = useRouter()
-  const { clients, isLoading, isError, refetch, addClient, clientRepository } = useClients()
+  const { clients, total, isLoading, isError, refetch, addClient, clientRepository } = useClients()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all')
   const [createOpen, setCreateOpen] = useState(false)
   const [createError, setCreateError] = useState<string | undefined>(undefined)
+  const [isCreating, setIsCreating] = useState(false)
 
   const [searchResults, setSearchResults] = useState<Client[] | null>(null)
   const [searchError, setSearchError] = useState<string | undefined>(undefined)
@@ -88,13 +89,26 @@ export default function ClientsPage() {
   }, [clientRepository, query, clients])
 
   const queryFiltered = searchResults ?? clients
+  const clientCount = total ?? clients.length
 
-  const handleCreate = (values: { name: string; phone: string; email?: string }) => {
+  const handleCreate = (values: { name: string; phone: string; email?: string | null }) => {
     setCreateError(undefined)
-    addClient(values, {
-      onSuccess: () => setCreateOpen(false),
-      onError: (message) => setCreateError(message),
-    })
+    setIsCreating(true)
+    // The create DTO's email is optional-but-not-nullable (see server/clients/dto/client.dto.ts),
+    // so a cleared field must be omitted (`undefined`), never sent as `null`.
+    addClient(
+      { name: values.name, phone: values.phone, email: values.email ?? undefined },
+      {
+        onSuccess: () => {
+          setIsCreating(false)
+          setCreateOpen(false)
+        },
+        onError: (message) => {
+          setIsCreating(false)
+          setCreateError(message)
+        },
+      },
+    )
   }
 
   const handleOpenCreate = () => {
@@ -127,7 +141,7 @@ export default function ClientsPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold tracking-tight lg:text-2xl">Clients</h1>
           <p className="text-sm text-muted-foreground">
-            {clients.length} client{clients.length > 1 ? 's' : ''} enregistré{clients.length > 1 ? 's' : ''}.
+            {clientCount} client{clientCount > 1 ? 's' : ''} enregistré{clientCount > 1 ? 's' : ''}.
           </p>
         </div>
         <Button
@@ -208,6 +222,7 @@ export default function ClientsPage() {
           onCancel={() => setCreateOpen(false)}
           submitLabel="Créer"
           serverError={createError}
+          isSubmitting={isCreating}
         />
       </Dialog>
     </div>

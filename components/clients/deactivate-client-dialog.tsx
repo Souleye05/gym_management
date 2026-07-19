@@ -9,19 +9,30 @@ export function DeactivateClientDialog({
   clientName,
   onConfirm,
   error,
+  pending = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   clientName: string
   onConfirm: () => void
   error?: string
+  pending?: boolean
 }) {
+  // While a deactivation request is in flight, dismissal (Escape, backdrop click, Cancel) is
+  // blocked and the confirm button is disabled, so a double-click can't fire a second mutation
+  // and a "cancel" attempt can't race against the (uncancellable) request resolving successfully.
+  const handleOpenChange = (next: boolean) => {
+    if (pending) return
+    onOpenChange(next)
+  }
+
   const handleConfirm = () => {
+    if (pending) return
     onConfirm()
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogHeader>
         <DialogTitle>Désactiver {clientName} ?</DialogTitle>
         <DialogDescription>
@@ -34,11 +45,11 @@ export function DeactivateClientDialog({
         </p>
       )}
       <DialogFooter>
-        <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={pending}>
           Annuler
         </Button>
-        <Button variant="destructive" onClick={handleConfirm}>
-          Désactiver
+        <Button variant="destructive" onClick={handleConfirm} disabled={pending}>
+          {pending ? 'Désactivation…' : 'Désactiver'}
         </Button>
       </DialogFooter>
     </Dialog>

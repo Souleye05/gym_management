@@ -1,6 +1,7 @@
 // app/(staff)/clients/[id]/page.tsx
 'use client'
 
+import { useQuery } from '@tanstack/react-query'
 import { CalendarClock, CreditCard, Pencil, RefreshCw, Trash2, Users } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -23,6 +24,7 @@ import { ClientQrCode } from '@/components/scan/client-qr-code'
 import { useClients } from '@/components/providers/clients-provider'
 import { useSessions } from '@/components/providers/sessions-provider'
 import { useSubscriptions } from '@/components/providers/subscriptions-provider'
+import { getClientByIdRequest } from '@/lib/clients/fetch-clients'
 import { PLANS } from '@/lib/subscriptions/plans'
 import { checkSessionEligibility } from '@/lib/sessions/eligibility'
 import type { PaymentMethod, PlanId, Subscription } from '@/lib/subscriptions/types'
@@ -44,15 +46,28 @@ export default function ClientProfilePage() {
   const { getSessionsForClient, recordSubscriberSession } = useSessions()
   const [editOpen, setEditOpen] = useState(false)
   const [editError, setEditError] = useState<string | undefined>(undefined)
+  const [isUpdating, setIsUpdating] = useState(false)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
   const [deactivateError, setDeactivateError] = useState<string | undefined>(undefined)
+  const [isDeactivating, setIsDeactivating] = useState(false)
   const [subscriptionFormOpen, setSubscriptionFormOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<Subscription | null>(null)
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false)
   const [sessionPaymentMethod, setSessionPaymentMethod] = useState<PaymentMethod>('cash')
   const [sessionConfirmation, setSessionConfirmation] = useState<Session | null>(null)
 
-  const client = getClient(params.id)
+  const listClient = getClient(params.id)
+  // The clients list is capped to the backend's first page of active clients (see
+  // DEFAULT_LIST_ACTIVE_LIMIT). A real, active client beyond that page won't be in `clients`, so
+  // once the list has genuinely finished loading (not mid-fetch, not errored) and still doesn't
+  // contain this id, fall back to a direct single-client fetch before concluding it doesn't exist.
+  const shouldFetchFallbackClient = !listClient && !clientsLoading && !clientsError
+  const fallbackClientQuery = useQuery({
+    queryKey: ['client', params.id],
+    queryFn: () => getClientByIdRequest(params.id),
+    enabled: shouldFetchFallbackClient,
+  })
+  const client = listClient ?? fallbackClientQuery.data
   const clientStatus = useClientStatus(params.id)
 
   if (clientsLoading) {
@@ -75,6 +90,13 @@ export default function ClientProfilePage() {
   }
 
   if (!client) {
+    if (fallbackClientQuery.isLoading) {
+      return (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-muted-foreground">Chargement…</p>
+        </div>
+      )
+    }
     return (
       <EmptyState
         icon={Users}
@@ -94,11 +116,18 @@ export default function ClientProfilePage() {
   const sessionHistory = getSessionsForClient(client.id)
   const sessionEligibility = checkSessionEligibility(currentSubscription)
 
-  const handleUpdate = (values: { name: string; phone: string; email?: string }) => {
+  const handleUpdate = (values: { name: string; phone: string; email?: string | null }) => {
     setEditError(undefined)
+    setIsUpdating(true)
     updateClient(client.id, values, {
-      onSuccess: () => setEditOpen(false),
-      onError: (message) => setEditError(message),
+      onSuccess: () => {
+        setIsUpdating(false)
+        setEditOpen(false)
+      },
+      onError: (message) => {
+        setIsUpdating(false)
+        setEditError(message)
+      },
     })
   }
 
@@ -114,12 +143,17 @@ export default function ClientProfilePage() {
 
   const handleDeactivate = () => {
     setDeactivateError(undefined)
+    setIsDeactivating(true)
     deactivateClient(client.id, {
       onSuccess: () => {
+        setIsDeactivating(false)
         setDeactivateOpen(false)
         router.push('/clients')
       },
-      onError: (message) => setDeactivateError(message),
+      onError: (message) => {
+        setIsDeactivating(false)
+        setDeactivateError(message)
+      },
     })
   }
 
@@ -299,6 +333,7 @@ export default function ClientProfilePage() {
           onCancel={() => setEditOpen(false)}
           submitLabel="Enregistrer"
           serverError={editError}
+          isSubmitting={isUpdating}
         />
       </Dialog>
 
@@ -308,6 +343,7 @@ export default function ClientProfilePage() {
         clientName={client.name}
         onConfirm={handleDeactivate}
         error={deactivateError}
+        pending={isDeactivating}
       />
 
       <Dialog open={subscriptionFormOpen} onOpenChange={setSubscriptionFormOpen}>

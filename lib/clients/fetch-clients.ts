@@ -66,3 +66,21 @@ export async function findClientByCardNumberRequest(cardNumber: string): Promise
   const data = await unwrap<ListClientsResult>(response, 'Impossible de rechercher le client.')
   return data.clients[0]
 }
+
+/**
+ * Fallback single-client lookup used when a client isn't present in the (paginated) in-memory
+ * clients list — e.g. an active client beyond the first page. Unlike the other request helpers,
+ * this treats a failed envelope (including a 404 "not found") as an expected, non-exceptional
+ * `undefined` result rather than throwing, since callers use this purely to double-check before
+ * concluding a client truly doesn't exist.
+ */
+export async function getClientByIdRequest(id: string): Promise<Client | undefined> {
+  const response = await fetch(`/api/clients/${id}`)
+  let envelope: ApiEnvelope<{ client: Client }>
+  try {
+    envelope = await response.json()
+  } catch {
+    return undefined
+  }
+  return envelope.success ? envelope.data.client : undefined
+}

@@ -20,6 +20,7 @@ type MutationOpts<TResult = void> = { onSuccess?: (result: TResult) => void; onE
 
 type ClientsContextValue = {
   clients: Client[]
+  total?: number
   isLoading: boolean
   isError: boolean
   refetch: () => void
@@ -111,6 +112,7 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ClientsContextValue>(
     () => ({
       clients,
+      total: query.data?.total,
       isLoading: query.isPending,
       isError: query.isError,
       refetch: query.refetch,
@@ -120,7 +122,18 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
       deactivateClient,
       getClient,
     }),
-    [clients, query.isPending, query.isError, query.refetch, clientRepository, addClient, updateClient, deactivateClient, getClient],
+    [
+      clients,
+      query.data?.total,
+      query.isPending,
+      query.isError,
+      query.refetch,
+      clientRepository,
+      addClient,
+      updateClient,
+      deactivateClient,
+      getClient,
+    ],
   )
 
   return <ClientsContext.Provider value={value}>{children}</ClientsContext.Provider>

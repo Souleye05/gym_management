@@ -8,7 +8,7 @@ import type { Client } from '@/lib/clients/types'
 type ClientFormValues = {
   name: string
   phone: string
-  email?: string
+  email?: string | null
 }
 
 type ClientFormErrors = Partial<Record<'name' | 'phone' | 'email', string>>
@@ -33,13 +33,21 @@ export function ClientForm({
   onCancel,
   submitLabel,
   serverError,
+  isSubmitting = false,
 }: {
   initialValues?: Pick<Client, 'name' | 'phone' | 'email'>
   onSubmit: (values: ClientFormValues) => void
   onCancel: () => void
   submitLabel: string
   serverError?: string
+  isSubmitting?: boolean
 }) {
+  // Presence of initialValues indicates edit mode. This matters for a blank email: the update DTO
+  // treats an explicit `null` as "clear the field" (vs. an absent key meaning "leave unchanged"),
+  // while the create DTO's email is optional-but-not-nullable, so creation must keep omitting the
+  // key (`undefined`) rather than sending `null`.
+  const isEditMode = initialValues !== undefined
+
   const [name, setName] = useState(initialValues?.name ?? '')
   const [phone, setPhone] = useState(initialValues?.phone ?? '')
   const [email, setEmail] = useState(initialValues?.email ?? '')
@@ -47,13 +55,14 @@ export function ClientForm({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (isSubmitting) return
     const nextErrors = validate({ name, phone, email })
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
     onSubmit({
       name: name.trim(),
       phone: phone.trim(),
-      email: email.trim().length > 0 ? email.trim() : undefined,
+      email: email.trim().length > 0 ? email.trim() : isEditMode ? null : undefined,
     })
   }
 
@@ -109,10 +118,10 @@ export function ClientForm({
         </p>
       )}
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Annuler
         </Button>
-        <Button type="submit" className="bg-gradient-brand text-primary-foreground">
+        <Button type="submit" className="bg-gradient-brand text-primary-foreground" disabled={isSubmitting}>
           {submitLabel}
         </Button>
       </div>
