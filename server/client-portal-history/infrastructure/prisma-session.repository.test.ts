@@ -111,15 +111,10 @@ describe('PrismaSessionRepository.findRecentByClientId', () => {
 
 describe('sessions_type_consistency_check constraint', () => {
   it('rejects a SUBSCRIBER session with a visitor field set', async () => {
+    const clientId = await createTestClient('+33600002006')
     await expect(
       prismaClient.session.create({
-        data: {
-          type: 'SUBSCRIBER',
-          clientId: null,
-          visitorName: 'Should Fail',
-          amountPaid: 8,
-          paymentMethod: 'CASH',
-        },
+        data: { type: 'SUBSCRIBER', clientId, visitorName: 'Should Fail', amountPaid: 8, paymentMethod: 'CASH' },
       }),
     ).rejects.toThrow()
   })
