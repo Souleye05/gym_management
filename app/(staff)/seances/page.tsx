@@ -99,7 +99,7 @@ function SubscriberEligibilityStep({
 
 export default function SeancesPage() {
   const router = useRouter()
-  const { clients, clientRepository } = useClients()
+  const { clients, clientRepository, isLoading } = useClients()
   const { getSessionsForToday, recordSubscriberSession, recordVisitorSession } = useSessions()
 
   const [subscriberDialogOpen, setSubscriberDialogOpen] = useState(false)
@@ -145,6 +145,14 @@ export default function SeancesPage() {
     setVisitorDialogOpen(false)
     setConfirmationClientName(undefined)
     setConfirmation(created)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-sm text-muted-foreground">Chargement…</p>
+      </div>
+    )
   }
 
   return (

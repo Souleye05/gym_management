@@ -59,7 +59,7 @@ function SubscriptionRow({
 
 export default function AbonnementsPage() {
   const router = useRouter()
-  const { clients } = useClients()
+  const { clients, isLoading } = useClients()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<SubscriptionStatus | 'all'>('all')
 
@@ -68,6 +68,14 @@ export default function AbonnementsPage() {
     if (normalizedQuery.length === 0) return clients
     return clients.filter((client) => client.name.toLowerCase().includes(normalizedQuery))
   }, [clients, query])
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-sm text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
