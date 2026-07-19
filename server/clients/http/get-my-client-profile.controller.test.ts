@@ -114,8 +114,11 @@ describe('getMyClientProfileController', () => {
 
     expect(res.status).toBe(200)
     expect(json.data.subscription.id).toBe(current.id)
+    expect(json.data.subscription.planId).toBe('quarterly')
     expect(json.data.subscriptionHistory).toHaveLength(2)
     expect(json.data.sessionHistory).toHaveLength(1)
+    expect(json.data.sessionHistory[0].type).toBe('subscriber')
+    expect(json.data.sessionHistory[0].paymentMethod).toBe('cash')
   })
 
   it('caps sessionHistory at 20 even when more sessions exist', async () => {
