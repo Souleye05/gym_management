@@ -1,6 +1,7 @@
 import type { PrismaClient as PrismaClientType } from '../../../lib/generated/prisma/client'
-import type { Subscription } from '../domain/entities'
+import { PAYMENT_METHODS, PLAN_IDS, type Subscription } from '../domain/entities'
 import type { SubscriptionRepository } from '../repositories/subscription.repository'
+import { validateEnum } from './validate-enum'
 
 type PrismaSubscriptionRow = {
   id: string
@@ -18,12 +19,12 @@ function toDomain(row: PrismaSubscriptionRow): Subscription {
   return {
     id: row.id,
     clientId: row.clientId,
-    planId: row.planId as Subscription['planId'],
+    planId: validateEnum(row.planId, PLAN_IDS, 'Subscription.planId'),
     startDate: row.startDate,
     endDate: row.endDate,
     suspended: row.suspended,
     amountPaid: row.amountPaid,
-    paymentMethod: row.paymentMethod as Subscription['paymentMethod'],
+    paymentMethod: validateEnum(row.paymentMethod, PAYMENT_METHODS, 'Subscription.paymentMethod'),
     createdAt: row.createdAt,
   }
 }
@@ -32,18 +33,14 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
   constructor(private readonly prisma: PrismaClientType) {}
 
   async findAllByClientId(clientId: string): Promise<Subscription[]> {
+    // Secondary `id` tiebreaker makes ordering deterministic when two subscriptions share an
+    // identical endDate — without it, Postgres gives no guarantee about tie order, and callers
+    // that treat this array's first element as "the latest" (DefaultClientHistoryService) could
+    // observe a different row than a caller re-running the same query moments later.
     const rows = await this.prisma.subscription.findMany({
       where: { clientId },
-      orderBy: { endDate: 'desc' },
+      orderBy: [{ endDate: 'desc' }, { id: 'asc' }],
     })
     return rows.map(toDomain)
-  }
-
-  async findLatestByClientId(clientId: string): Promise<Subscription | null> {
-    const row = await this.prisma.subscription.findFirst({
-      where: { clientId },
-      orderBy: { endDate: 'desc' },
-    })
-    return row ? toDomain(row) : null
   }
 }

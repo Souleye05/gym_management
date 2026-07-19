@@ -9,7 +9,10 @@ import {
   type ListActivePagination,
 } from '../repositories/client.repository'
 import { parseCardNumber } from '../infrastructure/format-card-number'
+import { guardAgainstLeakingInternals } from '../../shared/guard-against-leaking-internals'
 import type { ClientService, ListClientsResult } from './client.service'
+
+const SOURCE = 'ClientService'
 
 const NOT_FOUND: ClientDomainError = { code: 'not-found', message: 'Client introuvable.' }
 const PHONE_ALREADY_USED: ClientDomainError = {
@@ -18,27 +21,11 @@ const PHONE_ALREADY_USED: ClientDomainError = {
   field: 'phone',
 }
 
-/**
- * Runs a repository call and, if it throws anything other than a ClientDomainError-carrying
- * rejection (this repository never throws those — domain failures are always expressed via the
- * Result-returning callers above, never by throwing), logs the real error server-side and rethrows
- * a generic error whose message is safe to eventually surface in an HTTP response. No Prisma
- * message, code, or constraint name is ever allowed past this boundary.
- */
-async function guardAgainstLeakingInternals<T>(operation: () => Promise<T>): Promise<T> {
-  try {
-    return await operation()
-  } catch (cause) {
-    console.error('[ClientService] unexpected repository failure', cause)
-    throw new Error('internal-error')
-  }
-}
-
 export class DefaultClientService implements ClientService {
   constructor(private readonly clientRepository: ClientRepository) {}
 
   async createClient(input: CreateClientDto): Promise<Result<Client, ClientDomainError>> {
-    return guardAgainstLeakingInternals(async () => {
+    return guardAgainstLeakingInternals(SOURCE, async () => {
       const existing = await this.clientRepository.findByPhone(input.phone, { activeOnly: true })
       if (existing) return err(PHONE_ALREADY_USED)
 
@@ -58,7 +45,7 @@ export class DefaultClientService implements ClientService {
   }
 
   async getClient(id: string): Promise<Result<Client, ClientDomainError>> {
-    return guardAgainstLeakingInternals(async () => {
+    return guardAgainstLeakingInternals(SOURCE, async () => {
       const client = await this.clientRepository.findById(id)
       if (!client || !client.isActive) return err(NOT_FOUND)
       return ok(client)
@@ -66,7 +53,7 @@ export class DefaultClientService implements ClientService {
   }
 
   async listClients(query?: string, pagination?: ListActivePagination): Promise<ListClientsResult> {
-    return guardAgainstLeakingInternals(async () => {
+    return guardAgainstLeakingInternals(SOURCE, async () => {
       if (query && query.trim().length > 0) {
         const clients = await this.clientRepository.search(query)
         return { clients }
@@ -76,27 +63,27 @@ export class DefaultClientService implements ClientService {
   }
 
   async findByPhone(phone: string): Promise<Client | null> {
-    return guardAgainstLeakingInternals(() => this.clientRepository.findByPhone(phone, { activeOnly: true }))
+    return guardAgainstLeakingInternals(SOURCE, () => this.clientRepository.findByPhone(phone, { activeOnly: true }))
   }
 
   async findByCardNumber(cardNumber: string): Promise<Client | null> {
     const sequence = parseCardNumber(cardNumber)
     if (sequence === null) return null
-    return guardAgainstLeakingInternals(async () => {
+    return guardAgainstLeakingInternals(SOURCE, async () => {
       const client = await this.clientRepository.findByCardSequence(sequence)
       return client && client.isActive ? client : null
     })
   }
 
   async findByClientAccountId(clientAccountId: string): Promise<Client | null> {
-    return guardAgainstLeakingInternals(async () => {
+    return guardAgainstLeakingInternals(SOURCE, async () => {
       const client = await this.clientRepository.findByClientAccountId(clientAccountId)
       return client && client.isActive ? client : null
     })
   }
 
   async updateClient(id: string, input: UpdateClientDto): Promise<Result<Client, ClientDomainError>> {
-    return guardAgainstLeakingInternals(async () => {
+    return guardAgainstLeakingInternals(SOURCE, async () => {
       const existing = await this.clientRepository.findById(id)
       if (!existing || !existing.isActive) return err(NOT_FOUND)
 
@@ -117,7 +104,7 @@ export class DefaultClientService implements ClientService {
   }
 
   async deactivateClient(id: string): Promise<Result<void, ClientDomainError>> {
-    return guardAgainstLeakingInternals(async () => {
+    return guardAgainstLeakingInternals(SOURCE, async () => {
       const existing = await this.clientRepository.findById(id)
       if (!existing || !existing.isActive) return err(NOT_FOUND)
 

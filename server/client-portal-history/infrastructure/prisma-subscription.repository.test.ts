@@ -2,16 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { prismaClient } from '../../shared/prisma-client'
 import { cleanClientPortalHistoryTables } from './test-helpers/clean-client-portal-history-tables'
 import { cleanClientsTable } from '../../clients/infrastructure/test-helpers/clean-clients-table'
-import { PrismaClientRepository } from '../../clients/infrastructure/prisma-client.repository'
+import { createTestClient } from './test-helpers/create-test-client'
 import { PrismaSubscriptionRepository } from './prisma-subscription.repository'
 
-const clientRepository = new PrismaClientRepository(prismaClient)
 const repository = new PrismaSubscriptionRepository(prismaClient)
-
-async function createTestClient(phone: string): Promise<string> {
-  const client = await clientRepository.create({ name: 'Test Client', phone })
-  return client.id
-}
 
 beforeEach(async () => {
   await cleanClientPortalHistoryTables()
@@ -75,44 +69,6 @@ describe('PrismaSubscriptionRepository.findAllByClientId', () => {
 
     expect(results).toEqual([])
   })
-})
-
-describe('PrismaSubscriptionRepository.findLatestByClientId', () => {
-  it('returns the subscription with the latest endDate', async () => {
-    const clientId = await createTestClient('+33600001005')
-    await prismaClient.subscription.create({
-      data: {
-        clientId,
-        planId: 'MONTHLY',
-        startDate: new Date('2026-01-01'),
-        endDate: new Date('2026-02-01'),
-        amountPaid: 40,
-        paymentMethod: 'CASH',
-      },
-    })
-    const latest = await prismaClient.subscription.create({
-      data: {
-        clientId,
-        planId: 'QUARTERLY',
-        startDate: new Date('2026-02-01'),
-        endDate: new Date('2026-05-01'),
-        amountPaid: 105,
-        paymentMethod: 'CARD',
-      },
-    })
-
-    const result = await repository.findLatestByClientId(clientId)
-
-    expect(result?.id).toBe(latest.id)
-  })
-
-  it('returns null when the client has no subscriptions', async () => {
-    const clientId = await createTestClient('+33600001006')
-
-    const result = await repository.findLatestByClientId(clientId)
-
-    expect(result).toBeNull()
-  })
 
   it('includes a suspended subscription if it is still the latest by endDate', async () => {
     const clientId = await createTestClient('+33600001007')
@@ -128,9 +84,40 @@ describe('PrismaSubscriptionRepository.findLatestByClientId', () => {
       },
     })
 
-    const result = await repository.findLatestByClientId(clientId)
+    const results = await repository.findAllByClientId(clientId)
 
-    expect(result?.id).toBe(suspended.id)
-    expect(result?.suspended).toBe(true)
+    expect(results[0]?.id).toBe(suspended.id)
+    expect(results[0]?.suspended).toBe(true)
+  })
+
+  it('breaks endDate ties deterministically using id as a secondary sort key', async () => {
+    const clientId = await createTestClient('+33600001008')
+    const tiedEndDate = new Date('2026-06-01')
+    const first = await prismaClient.subscription.create({
+      data: {
+        clientId,
+        planId: 'MONTHLY',
+        startDate: new Date('2026-01-01'),
+        endDate: tiedEndDate,
+        amountPaid: 40,
+        paymentMethod: 'CASH',
+      },
+    })
+    const second = await prismaClient.subscription.create({
+      data: {
+        clientId,
+        planId: 'QUARTERLY',
+        startDate: new Date('2026-01-01'),
+        endDate: tiedEndDate,
+        amountPaid: 105,
+        paymentMethod: 'CARD',
+      },
+    })
+
+    const results = await repository.findAllByClientId(clientId)
+
+    expect(results).toHaveLength(2)
+    const expectedOrder = [first.id, second.id].sort()
+    expect(results.map((r) => r.id)).toEqual(expectedOrder)
   })
 })

@@ -27,7 +27,9 @@ async function main() {
     })
   }
 
-  const admin = await prisma.staffAccount.findUniqueOrThrow({ where: { email: 'admin@atlas.fit' } })
+  const adminSeed = STAFF_SEED.find((staff) => staff.role === Role.ADMIN)
+  if (!adminSeed) throw new Error('STAFF_SEED has no ADMIN entry')
+  const admin = await prisma.staffAccount.findUniqueOrThrow({ where: { email: adminSeed.email } })
 
   const linkedClients: Record<string, string> = {}
 
@@ -50,51 +52,56 @@ async function main() {
   }
 
   // Yasmine Kaddour: active current subscription + one past subscription + recent sessions.
+  // Wrapped in a transaction so an interrupted seed run can never leave this client with only
+  // some of its rows created — the hasSubscriptions guard below only stays accurate ("0 rows" or
+  // "fully seeded", never partial) if the whole block commits atomically or not at all.
   const yasmineId = linkedClients['+33612345601']
   if (yasmineId) {
     const hasSubscriptions = await prisma.subscription.findFirst({ where: { clientId: yasmineId } })
     if (!hasSubscriptions) {
-      await prisma.subscription.create({
-        data: {
-          clientId: yasmineId,
-          planId: 'MONTHLY',
-          startDate: new Date(Date.now() - 120 * DAY_MS),
-          endDate: new Date(Date.now() - 90 * DAY_MS),
-          amountPaid: 40,
-          paymentMethod: 'CASH',
-          createdByStaffId: admin.id,
-        },
-      })
-      await prisma.subscription.create({
-        data: {
-          clientId: yasmineId,
-          planId: 'QUARTERLY',
-          startDate: new Date(Date.now() - 30 * DAY_MS),
-          endDate: new Date(Date.now() + 60 * DAY_MS),
-          amountPaid: 105,
-          paymentMethod: 'CARD',
-          createdByStaffId: admin.id,
-        },
-      })
-      await prisma.session.create({
-        data: {
-          type: 'SUBSCRIBER',
-          clientId: yasmineId,
-          amountPaid: 8,
-          paymentMethod: 'CASH',
-          checkedInAt: new Date(Date.now() - 2 * DAY_MS),
-          createdByStaffId: admin.id,
-        },
-      })
-      await prisma.session.create({
-        data: {
-          type: 'SUBSCRIBER',
-          clientId: yasmineId,
-          amountPaid: 8,
-          paymentMethod: 'CARD',
-          checkedInAt: new Date(Date.now() - 1 * DAY_MS),
-          createdByStaffId: admin.id,
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.subscription.create({
+          data: {
+            clientId: yasmineId,
+            planId: 'MONTHLY',
+            startDate: new Date(Date.now() - 120 * DAY_MS),
+            endDate: new Date(Date.now() - 90 * DAY_MS),
+            amountPaid: 40,
+            paymentMethod: 'CASH',
+            createdByStaffId: admin.id,
+          },
+        })
+        await tx.subscription.create({
+          data: {
+            clientId: yasmineId,
+            planId: 'QUARTERLY',
+            startDate: new Date(Date.now() - 30 * DAY_MS),
+            endDate: new Date(Date.now() + 60 * DAY_MS),
+            amountPaid: 105,
+            paymentMethod: 'CARD',
+            createdByStaffId: admin.id,
+          },
+        })
+        await tx.session.create({
+          data: {
+            type: 'SUBSCRIBER',
+            clientId: yasmineId,
+            amountPaid: 8,
+            paymentMethod: 'CASH',
+            checkedInAt: new Date(Date.now() - 2 * DAY_MS),
+            createdByStaffId: admin.id,
+          },
+        })
+        await tx.session.create({
+          data: {
+            type: 'SUBSCRIBER',
+            clientId: yasmineId,
+            amountPaid: 8,
+            paymentMethod: 'CARD',
+            checkedInAt: new Date(Date.now() - 1 * DAY_MS),
+            createdByStaffId: admin.id,
+          },
+        })
       })
     }
   }
@@ -104,26 +111,28 @@ async function main() {
   if (marcId) {
     const hasSubscriptions = await prisma.subscription.findFirst({ where: { clientId: marcId } })
     if (!hasSubscriptions) {
-      await prisma.subscription.create({
-        data: {
-          clientId: marcId,
-          planId: 'MONTHLY',
-          startDate: new Date(Date.now() - 60 * DAY_MS),
-          endDate: new Date(Date.now() - 30 * DAY_MS),
-          amountPaid: 40,
-          paymentMethod: 'MOBILE_MONEY',
-          createdByStaffId: admin.id,
-        },
-      })
-      await prisma.session.create({
-        data: {
-          type: 'SUBSCRIBER',
-          clientId: marcId,
-          amountPaid: 8,
-          paymentMethod: 'CASH',
-          checkedInAt: new Date(Date.now() - 35 * DAY_MS),
-          createdByStaffId: admin.id,
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.subscription.create({
+          data: {
+            clientId: marcId,
+            planId: 'MONTHLY',
+            startDate: new Date(Date.now() - 60 * DAY_MS),
+            endDate: new Date(Date.now() - 30 * DAY_MS),
+            amountPaid: 40,
+            paymentMethod: 'MOBILE_MONEY',
+            createdByStaffId: admin.id,
+          },
+        })
+        await tx.session.create({
+          data: {
+            type: 'SUBSCRIBER',
+            clientId: marcId,
+            amountPaid: 8,
+            paymentMethod: 'CASH',
+            checkedInAt: new Date(Date.now() - 35 * DAY_MS),
+            createdByStaffId: admin.id,
+          },
+        })
       })
     }
   }

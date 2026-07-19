@@ -7,7 +7,8 @@ import { clientRequestOtpController } from '../../auth/http/client-request-otp.c
 import { clientVerifyOtpController } from '../../auth/http/client-verify-otp.controller'
 import { cleanClientsTable } from '../infrastructure/test-helpers/clean-clients-table'
 import { cleanClientPortalHistoryTables } from '../../client-portal-history/infrastructure/test-helpers/clean-client-portal-history-tables'
-import { getMyClientProfileController } from './get-my-client-profile.controller'
+import type { Session } from '../../client-portal-history/domain/entities'
+import { getMyClientProfileController, toApiSession } from './get-my-client-profile.controller'
 
 const SIMULATED_OTP_CODE = '123456'
 
@@ -137,5 +138,26 @@ describe('getMyClientProfileController', () => {
     const json = await res.json()
 
     expect(json.data.sessionHistory).toHaveLength(20)
+  })
+})
+
+describe('toApiSession', () => {
+  it('throws rather than silently mislabeling a VISITOR session as subscriber', () => {
+    // The DB's sessions_type_consistency_check constraint guarantees a VISITOR row reaching this
+    // mapper is impossible through the real client-scoped query path (see
+    // prisma-session.repository.test.ts), so this constructs the invalid case directly to prove
+    // the defensive guard actually fires rather than silently emitting wrong data.
+    const visitorSession: Session = {
+      id: 'sess-visitor',
+      type: 'VISITOR',
+      clientId: null,
+      visitorName: 'Nadia Ferrand',
+      visitorPhone: '+33698765432',
+      amountPaid: 8,
+      paymentMethod: 'CASH',
+      checkedInAt: new Date(),
+    }
+
+    expect(() => toApiSession(visitorSession)).toThrow('Unexpected VISITOR session in client-scoped history')
   })
 })

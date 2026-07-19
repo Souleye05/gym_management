@@ -28,6 +28,13 @@ const SUSPENDED_SUBSCRIPTION: Subscription = {
   suspended: true,
 }
 
+const FUTURE_SUBSCRIPTION: Subscription = {
+  ...ACTIVE_SUBSCRIPTION,
+  id: 'sub4',
+  startDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000),
+  endDate: new Date(Date.now() + 55 * 24 * 60 * 60 * 1000),
+}
+
 const SESSION: Session = {
   id: 'sess1',
   type: 'SUBSCRIBER',
@@ -42,7 +49,6 @@ const SESSION: Session = {
 function fakeSubscriptionRepository(overrides: Partial<SubscriptionRepository> = {}): SubscriptionRepository {
   return {
     findAllByClientId: async () => [],
-    findLatestByClientId: async () => null,
     ...overrides,
   }
 }
@@ -57,10 +63,7 @@ function fakeSessionRepository(overrides: Partial<SessionRepository> = {}): Sess
 describe('DefaultClientHistoryService.getHistory', () => {
   it('returns the latest subscription as current when it has not expired', async () => {
     const service = new DefaultClientHistoryService(
-      fakeSubscriptionRepository({
-        findAllByClientId: async () => [ACTIVE_SUBSCRIPTION],
-        findLatestByClientId: async () => ACTIVE_SUBSCRIPTION,
-      }),
+      fakeSubscriptionRepository({ findAllByClientId: async () => [ACTIVE_SUBSCRIPTION] }),
       fakeSessionRepository(),
     )
 
@@ -71,10 +74,7 @@ describe('DefaultClientHistoryService.getHistory', () => {
 
   it('returns null for current when the latest subscription has expired', async () => {
     const service = new DefaultClientHistoryService(
-      fakeSubscriptionRepository({
-        findAllByClientId: async () => [EXPIRED_SUBSCRIPTION],
-        findLatestByClientId: async () => EXPIRED_SUBSCRIPTION,
-      }),
+      fakeSubscriptionRepository({ findAllByClientId: async () => [EXPIRED_SUBSCRIPTION] }),
       fakeSessionRepository(),
     )
 
@@ -92,14 +92,11 @@ describe('DefaultClientHistoryService.getHistory', () => {
   })
 
   it('treats a suspended-but-unexpired subscription as still current', async () => {
-    // "Current" here means "on file and not yet expired" — the active/suspended/expiring
+    // "Current" here means "on file, started, and not yet expired" — the active/suspended/expiring
     // distinction is a display concern computed by the frontend's computeSubscriptionStatus(),
     // not by this backend (see design doc's "statut non calculé côté backend" decision).
     const service = new DefaultClientHistoryService(
-      fakeSubscriptionRepository({
-        findAllByClientId: async () => [SUSPENDED_SUBSCRIPTION],
-        findLatestByClientId: async () => SUSPENDED_SUBSCRIPTION,
-      }),
+      fakeSubscriptionRepository({ findAllByClientId: async () => [SUSPENDED_SUBSCRIPTION] }),
       fakeSessionRepository(),
     )
 
@@ -109,12 +106,33 @@ describe('DefaultClientHistoryService.getHistory', () => {
     expect(history.currentSubscription?.suspended).toBe(true)
   })
 
+  it('skips a not-yet-started future subscription and falls back to the active one', async () => {
+    // subscriptions is ordered by endDate desc, so the future renewal (later endDate) sorts
+    // before the currently-active one — "current" must skip past it since it hasn't started yet.
+    const service = new DefaultClientHistoryService(
+      fakeSubscriptionRepository({ findAllByClientId: async () => [FUTURE_SUBSCRIPTION, ACTIVE_SUBSCRIPTION] }),
+      fakeSessionRepository(),
+    )
+
+    const history = await service.getHistory('c1')
+
+    expect(history.currentSubscription?.id).toBe('sub1')
+  })
+
+  it('returns null for current when the only subscription has not started yet', async () => {
+    const service = new DefaultClientHistoryService(
+      fakeSubscriptionRepository({ findAllByClientId: async () => [FUTURE_SUBSCRIPTION] }),
+      fakeSessionRepository(),
+    )
+
+    const history = await service.getHistory('c1')
+
+    expect(history.currentSubscription).toBeNull()
+  })
+
   it('returns the full subscriptions list and recent sessions unchanged', async () => {
     const service = new DefaultClientHistoryService(
-      fakeSubscriptionRepository({
-        findAllByClientId: async () => [ACTIVE_SUBSCRIPTION, EXPIRED_SUBSCRIPTION],
-        findLatestByClientId: async () => ACTIVE_SUBSCRIPTION,
-      }),
+      fakeSubscriptionRepository({ findAllByClientId: async () => [ACTIVE_SUBSCRIPTION, EXPIRED_SUBSCRIPTION] }),
       fakeSessionRepository({ findRecentByClientId: async () => [SESSION] }),
     )
 

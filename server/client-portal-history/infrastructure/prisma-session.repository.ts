@@ -1,6 +1,7 @@
 import type { PrismaClient as PrismaClientType } from '../../../lib/generated/prisma/client'
-import type { Session } from '../domain/entities'
+import { PAYMENT_METHODS, SESSION_TYPES, type Session } from '../domain/entities'
 import type { SessionRepository } from '../repositories/session.repository'
+import { validateEnum } from './validate-enum'
 
 type PrismaSessionRow = {
   id: string
@@ -16,12 +17,12 @@ type PrismaSessionRow = {
 function toDomain(row: PrismaSessionRow): Session {
   return {
     id: row.id,
-    type: row.type as Session['type'],
+    type: validateEnum(row.type, SESSION_TYPES, 'Session.type'),
     clientId: row.clientId,
     visitorName: row.visitorName,
     visitorPhone: row.visitorPhone,
     amountPaid: row.amountPaid,
-    paymentMethod: row.paymentMethod as Session['paymentMethod'],
+    paymentMethod: validateEnum(row.paymentMethod, PAYMENT_METHODS, 'Session.paymentMethod'),
     checkedInAt: row.checkedInAt,
   }
 }
@@ -30,9 +31,12 @@ export class PrismaSessionRepository implements SessionRepository {
   constructor(private readonly prisma: PrismaClientType) {}
 
   async findRecentByClientId(clientId: string, limit: number): Promise<Session[]> {
+    // Secondary `id` tiebreaker makes the 20-item cutoff deterministic when sessions share an
+    // identical checkedInAt — without it, which rows land inside vs. just outside `take` is not
+    // guaranteed stable across identical calls.
     const rows = await this.prisma.session.findMany({
       where: { clientId },
-      orderBy: { checkedInAt: 'desc' },
+      orderBy: [{ checkedInAt: 'desc' }, { id: 'asc' }],
       take: limit,
     })
     return rows.map(toDomain)

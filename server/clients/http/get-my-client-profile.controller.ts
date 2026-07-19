@@ -36,7 +36,16 @@ function toApiSubscription(subscription: Subscription) {
   }
 }
 
-function toApiSession(session: Session) {
+export function toApiSession(session: Session) {
+  if (session.type !== 'SUBSCRIBER') {
+    // This endpoint only ever returns a logged-in client's own sessions
+    // (findRecentByClientId queries by a non-null clientId, and the DB's
+    // sessions_type_consistency_check constraint guarantees a VISITOR row always has
+    // clientId NULL) — reaching this branch means that invariant broke elsewhere. Fail loudly
+    // rather than silently mislabeling a visitor session as 'subscriber' and dropping their
+    // name/phone with no error.
+    throw new Error(`Unexpected VISITOR session in client-scoped history: ${session.id}`)
+  }
   return {
     id: session.id,
     type: 'subscriber' as const,

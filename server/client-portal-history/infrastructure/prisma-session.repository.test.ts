@@ -2,16 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { prismaClient } from '../../shared/prisma-client'
 import { cleanClientPortalHistoryTables } from './test-helpers/clean-client-portal-history-tables'
 import { cleanClientsTable } from '../../clients/infrastructure/test-helpers/clean-clients-table'
-import { PrismaClientRepository } from '../../clients/infrastructure/prisma-client.repository'
+import { createTestClient } from './test-helpers/create-test-client'
 import { PrismaSessionRepository } from './prisma-session.repository'
 
-const clientRepository = new PrismaClientRepository(prismaClient)
 const repository = new PrismaSessionRepository(prismaClient)
-
-async function createTestClient(phone: string): Promise<string> {
-  const client = await clientRepository.create({ name: 'Test Client', phone })
-  return client.id
-}
 
 beforeEach(async () => {
   await cleanClientPortalHistoryTables()
@@ -106,6 +100,23 @@ describe('PrismaSessionRepository.findRecentByClientId', () => {
     const row = await prismaClient.session.findFirst({ where: { type: 'VISITOR' } })
     expect(row?.clientId).toBeNull()
     expect(row?.visitorName).toBe('Nadia Ferrand')
+  })
+
+  it('breaks checkedInAt ties deterministically using id as a secondary sort key', async () => {
+    const clientId = await createTestClient('+33600002007')
+    const tiedCheckedInAt = new Date('2026-01-10T10:00:00Z')
+    const first = await prismaClient.session.create({
+      data: { type: 'SUBSCRIBER', clientId, amountPaid: 8, paymentMethod: 'CASH', checkedInAt: tiedCheckedInAt },
+    })
+    const second = await prismaClient.session.create({
+      data: { type: 'SUBSCRIBER', clientId, amountPaid: 8, paymentMethod: 'CARD', checkedInAt: tiedCheckedInAt },
+    })
+
+    const results = await repository.findRecentByClientId(clientId, 20)
+
+    expect(results).toHaveLength(2)
+    const expectedOrder = [first.id, second.id].sort()
+    expect(results.map((r) => r.id)).toEqual(expectedOrder)
   })
 })
 
