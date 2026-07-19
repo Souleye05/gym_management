@@ -1,3 +1,4 @@
+// server/clients/http/get-my-client-profile.controller.ts
 import { NextResponse, type NextRequest } from 'next/server'
 import { apiSuccess } from '../../shared/api-response'
 import { getContainer } from '../../shared/container'
@@ -9,8 +10,24 @@ export async function getMyClientProfileController(req: NextRequest): Promise<Ne
   if (!auth.ok) return auth.response
 
   return withInternalErrorHandling(async () => {
-    const { clientService } = getContainer()
+    const { clientService, clientHistoryService } = getContainer()
     const client = await clientService.findByClientAccountId(auth.client.id)
-    return NextResponse.json(apiSuccess({ client }))
+
+    if (!client) {
+      return NextResponse.json(apiSuccess({
+        client: null,
+        subscription: null,
+        subscriptionHistory: [],
+        sessionHistory: [],
+      }))
+    }
+
+    const history = await clientHistoryService.getHistory(client.id)
+    return NextResponse.json(apiSuccess({
+      client,
+      subscription: history.currentSubscription,
+      subscriptionHistory: history.subscriptions,
+      sessionHistory: history.recentSessions,
+    }))
   })
 }
