@@ -19,12 +19,17 @@ import type { RefreshTokenLookupService } from '../auth/services/refresh-token-l
 import { PrismaClientRepository } from '../clients/infrastructure/prisma-client.repository'
 import { DefaultClientService } from '../clients/services/default-client.service'
 import type { ClientService } from '../clients/services/client.service'
+import { PrismaSubscriptionRepository } from '../client-portal-history/infrastructure/prisma-subscription.repository'
+import { PrismaSessionRepository } from '../client-portal-history/infrastructure/prisma-session.repository'
+import { DefaultClientHistoryService } from '../client-portal-history/services/default-client-history.service'
+import type { ClientHistoryService } from '../client-portal-history/services/client-history.service'
 
 export type Container = {
   staffAuthService: StaffAuthService
   clientAuthService: ClientAuthService
   refreshTokenLookupService: RefreshTokenLookupService
   clientService: ClientService
+  clientHistoryService: ClientHistoryService
 }
 
 function createContainer(): Container {
@@ -71,7 +76,11 @@ function createContainer(): Container {
   const clientRepository = new PrismaClientRepository(prismaClient)
   const clientService = new DefaultClientService(clientRepository)
 
-  return { staffAuthService, clientAuthService, refreshTokenLookupService, clientService }
+  const subscriptionRepository = new PrismaSubscriptionRepository(prismaClient)
+  const sessionRepository = new PrismaSessionRepository(prismaClient)
+  const clientHistoryService = new DefaultClientHistoryService(subscriptionRepository, sessionRepository)
+
+  return { staffAuthService, clientAuthService, refreshTokenLookupService, clientService, clientHistoryService }
 }
 
 declare global {
