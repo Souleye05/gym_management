@@ -27,17 +27,26 @@ export function ClientIdentification({
   const [method, setMethod] = useState<IdentificationMethod>('qr')
   const [cardNumberInput, setCardNumberInput] = useState('')
   const [notFound, setNotFound] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const [cameraFallback, setCameraFallback] = useState(false)
   const scannerRef = useRef<QrScannerHandle>(null)
 
   const resolveCardNumber = useCallback(
     async (cardNumber: string) => {
-      const client = await clientRepository.findByCardNumber(cardNumber)
-      if (client) {
+      try {
+        const client = await clientRepository.findByCardNumber(cardNumber)
+        if (client) {
+          setNotFound(false)
+          setSearchError(false)
+          onIdentified(client)
+        } else {
+          setNotFound(true)
+          setSearchError(false)
+          scannerRef.current?.reset()
+        }
+      } catch {
         setNotFound(false)
-        onIdentified(client)
-      } else {
-        setNotFound(true)
+        setSearchError(true)
         scannerRef.current?.reset()
       }
     },
@@ -128,6 +137,12 @@ export function ClientIdentification({
       {notFound && (
         <p role="alert" className="text-sm text-destructive">
           Carte non reconnue.
+        </p>
+      )}
+
+      {searchError && (
+        <p role="alert" className="text-sm text-destructive">
+          Erreur de recherche, réessayez.
         </p>
       )}
     </div>

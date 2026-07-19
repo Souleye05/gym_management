@@ -45,6 +45,7 @@ export default function ClientProfilePage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editError, setEditError] = useState<string | undefined>(undefined)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
+  const [deactivateError, setDeactivateError] = useState<string | undefined>(undefined)
   const [subscriptionFormOpen, setSubscriptionFormOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<Subscription | null>(null)
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false)
@@ -90,9 +91,19 @@ export default function ClientProfilePage() {
     })
   }
 
+  const handleOpenDeactivate = () => {
+    setDeactivateError(undefined)
+    setDeactivateOpen(true)
+  }
+
   const handleDeactivate = () => {
+    setDeactivateError(undefined)
     deactivateClient(client.id, {
-      onSuccess: () => router.push('/clients'),
+      onSuccess: () => {
+        setDeactivateOpen(false)
+        router.push('/clients')
+      },
+      onError: (message) => setDeactivateError(message),
     })
   }
 
@@ -153,7 +164,7 @@ export default function ClientProfilePage() {
                 <Pencil className="size-4" />
                 Modifier
               </Button>
-              <Button variant="destructive" onClick={() => setDeactivateOpen(true)}>
+              <Button variant="destructive" onClick={handleOpenDeactivate}>
                 <Trash2 className="size-4" />
                 Désactiver
               </Button>
@@ -280,6 +291,7 @@ export default function ClientProfilePage() {
         onOpenChange={setDeactivateOpen}
         clientName={client.name}
         onConfirm={handleDeactivate}
+        error={deactivateError}
       />
 
       <Dialog open={subscriptionFormOpen} onOpenChange={setSubscriptionFormOpen}>

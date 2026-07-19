@@ -17,6 +17,7 @@ export function ClientSearch({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Client[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const requestIdRef = useRef(0)
 
   useEffect(() => {
@@ -24,15 +25,24 @@ export function ClientSearch({
     if (trimmed.length === 0) {
       setResults([])
       setIsSearching(false)
+      setSearchError(false)
       return
     }
     const requestId = ++requestIdRef.current
     setIsSearching(true)
-    clientRepository.search(trimmed).then((clients) => {
-      if (requestIdRef.current !== requestId) return // a newer search superseded this one
-      setResults(clients)
-      setIsSearching(false)
-    })
+    setSearchError(false)
+    clientRepository
+      .search(trimmed)
+      .then((clients) => {
+        if (requestIdRef.current !== requestId) return // a newer search superseded this one
+        setResults(clients)
+        setIsSearching(false)
+      })
+      .catch(() => {
+        if (requestIdRef.current !== requestId) return // a newer search superseded this one
+        setIsSearching(false)
+        setSearchError(true)
+      })
   }, [clientRepository, query])
 
   return (
@@ -51,6 +61,10 @@ export function ClientSearch({
         <div className="flex max-h-60 flex-col gap-1 overflow-y-auto">
           {isSearching ? (
             <p className="py-4 text-center text-sm text-muted-foreground">Recherche…</p>
+          ) : searchError ? (
+            <p role="alert" className="py-4 text-center text-sm text-muted-foreground">
+              Erreur de recherche.
+            </p>
           ) : results.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">Aucun client trouvé.</p>
           ) : (

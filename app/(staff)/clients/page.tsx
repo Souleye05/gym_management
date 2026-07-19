@@ -62,19 +62,29 @@ export default function ClientsPage() {
   const [createError, setCreateError] = useState<string | undefined>(undefined)
 
   const [searchResults, setSearchResults] = useState<Client[] | null>(null)
+  const [searchError, setSearchError] = useState<string | undefined>(undefined)
   const requestIdRef = useRef(0)
 
   useEffect(() => {
     const trimmed = query.trim()
     if (trimmed.length === 0) {
+      ++requestIdRef.current // invalidate any in-flight search so a stale response can't clobber the cleared state
       setSearchResults(null)
+      setSearchError(undefined)
       return
     }
     const requestId = ++requestIdRef.current
-    clientRepository.search(trimmed).then((results) => {
-      if (requestIdRef.current !== requestId) return
-      setSearchResults(results)
-    })
+    setSearchError(undefined)
+    clientRepository
+      .search(trimmed)
+      .then((results) => {
+        if (requestIdRef.current !== requestId) return
+        setSearchResults(results)
+      })
+      .catch(() => {
+        if (requestIdRef.current !== requestId) return
+        setSearchError('Erreur de recherche.')
+      })
   }, [clientRepository, query])
 
   const queryFiltered = searchResults ?? clients
@@ -157,7 +167,11 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      {queryFiltered.length === 0 ? (
+      {searchError ? (
+        <p role="alert" className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-destructive">
+          {searchError}
+        </p>
+      ) : queryFiltered.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           Aucun client trouvé.
         </p>

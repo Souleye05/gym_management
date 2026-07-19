@@ -8,15 +8,16 @@ export function DeactivateClientDialog({
   onOpenChange,
   clientName,
   onConfirm,
+  error,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   clientName: string
   onConfirm: () => void
+  error?: string
 }) {
   const handleConfirm = () => {
     onConfirm()
-    onOpenChange(false)
   }
 
   return (
@@ -27,6 +28,11 @@ export function DeactivateClientDialog({
           Le client sera désactivé et n'apparaîtra plus dans les listes actives. Cette action ne supprime aucune donnée.
         </DialogDescription>
       </DialogHeader>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <DialogFooter>
         <Button variant="outline" onClick={() => onOpenChange(false)}>
           Annuler
