@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input, Label } from '@/components/ui/input'
+import { Label } from '@/components/ui/input'
+import { PhoneNumberInput } from '@/components/ui/phone-number-input'
 import { useAuth } from '@/components/providers/user-provider'
 
 export default function ClientLoginPage() {
@@ -44,15 +45,7 @@ export default function ClientLoginPage() {
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="phone">Numéro de téléphone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                autoComplete="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+33612345601"
-              />
+              <PhoneNumberInput id="phone" value={phone} onChange={setPhone} placeholder="612345601" />
             </div>
             {error && (
               <p role="alert" className="text-sm text-destructive">

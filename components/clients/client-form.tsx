@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
+import { PhoneNumberInput } from '@/components/ui/phone-number-input'
 import type { Client } from '@/lib/clients/types'
 
 type ClientFormValues = {
@@ -84,13 +85,7 @@ export function ClientForm({
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="client-phone">Téléphone</Label>
-        <Input
-          id="client-phone"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+33612345678"
-        />
+        <PhoneNumberInput id="client-phone" value={phone} onChange={setPhone} placeholder="771234567" />
         {errors.phone && (
           <p role="alert" className="text-sm text-destructive">
             {errors.phone}
