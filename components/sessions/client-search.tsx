@@ -1,22 +1,39 @@
 'use client'
 
 import { Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
-import type { ClientRepository } from '@/lib/clients/repository'
+import type { AsyncClientRepository } from '@/lib/clients/repository'
 import type { Client } from '@/lib/clients/types'
 
 export function ClientSearch({
   clientRepository,
   onSelect,
 }: {
-  clientRepository: ClientRepository
+  clientRepository: AsyncClientRepository
   onSelect: (client: Client) => void
 }) {
   const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Client[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const requestIdRef = useRef(0)
 
-  const results = useMemo(() => clientRepository.search(query), [clientRepository, query])
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (trimmed.length === 0) {
+      setResults([])
+      setIsSearching(false)
+      return
+    }
+    const requestId = ++requestIdRef.current
+    setIsSearching(true)
+    clientRepository.search(trimmed).then((clients) => {
+      if (requestIdRef.current !== requestId) return // a newer search superseded this one
+      setResults(clients)
+      setIsSearching(false)
+    })
+  }, [clientRepository, query])
 
   return (
     <div className="flex flex-col gap-3">
@@ -32,7 +49,9 @@ export function ClientSearch({
       </div>
       {query.trim().length > 0 && (
         <div className="flex max-h-60 flex-col gap-1 overflow-y-auto">
-          {results.length === 0 ? (
+          {isSearching ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">Recherche…</p>
+          ) : results.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">Aucun client trouvé.</p>
           ) : (
             results.map((client) => (

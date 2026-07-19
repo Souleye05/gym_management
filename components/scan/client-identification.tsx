@@ -7,7 +7,7 @@ import { Input, Label } from '@/components/ui/input'
 import { ClientSearch } from '@/components/sessions/client-search'
 import { QrScanner, type QrScannerError, type QrScannerHandle } from '@/components/scan/qr-scanner'
 import type { Client } from '@/lib/clients/types'
-import type { ClientRepository } from '@/lib/clients/repository'
+import type { AsyncClientRepository } from '@/lib/clients/repository'
 
 type IdentificationMethod = 'qr' | 'card-number' | 'search'
 
@@ -21,7 +21,7 @@ export function ClientIdentification({
   clientRepository,
   onIdentified,
 }: {
-  clientRepository: ClientRepository
+  clientRepository: AsyncClientRepository
   onIdentified: (client: Client) => void
 }) {
   const [method, setMethod] = useState<IdentificationMethod>('qr')
@@ -31,8 +31,8 @@ export function ClientIdentification({
   const scannerRef = useRef<QrScannerHandle>(null)
 
   const resolveCardNumber = useCallback(
-    (cardNumber: string) => {
-      const client = clientRepository.findByCardNumber(cardNumber)
+    async (cardNumber: string) => {
+      const client = await clientRepository.findByCardNumber(cardNumber)
       if (client) {
         setNotFound(false)
         onIdentified(client)
