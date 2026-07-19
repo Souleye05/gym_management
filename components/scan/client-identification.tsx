@@ -76,9 +76,13 @@ export function ClientIdentification({
     // 'unreadable' is a transient, expected state while positioning the camera — no action.
   }, [])
 
+  const handleCardNumberDigitsChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setCardNumberInput(event.target.value.replace(/\D/g, ''))
+  }
+
   const handleCardNumberSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    resolveCardNumber(cardNumberInput)
+    resolveCardNumber(`CARD-${cardNumberInput}`)
   }
 
   return (
@@ -107,13 +111,21 @@ export function ClientIdentification({
               Caméra indisponible. Saisissez le numéro de carte.
             </p>
             <form className="flex gap-2" onSubmit={handleCardNumberSubmit}>
-              <Input
-                value={cardNumberInput}
-                onChange={(e) => setCardNumberInput(e.target.value)}
-                placeholder="CARD-00001"
-                autoFocus
-              />
-              <Button type="submit">Valider</Button>
+              <div className="flex flex-1 items-stretch">
+                <span className="flex items-center rounded-l-lg border border-r-0 border-border bg-muted px-3 text-sm text-muted-foreground">
+                  CARD-
+                </span>
+                <Input
+                  value={cardNumberInput}
+                  onChange={handleCardNumberDigitsChange}
+                  placeholder="00001"
+                  autoFocus
+                  className="rounded-l-none"
+                />
+              </div>
+              <Button type="submit" disabled={cardNumberInput.length === 0}>
+                Valider
+              </Button>
             </form>
           </div>
         ) : (
@@ -124,14 +136,22 @@ export function ClientIdentification({
         <form className="flex flex-col gap-1.5" onSubmit={handleCardNumberSubmit}>
           <Label htmlFor="card-number-input">Numéro de carte</Label>
           <div className="flex gap-2">
-            <Input
-              id="card-number-input"
-              value={cardNumberInput}
-              onChange={(e) => setCardNumberInput(e.target.value)}
-              placeholder="CARD-00001"
-              autoFocus
-            />
-            <Button type="submit">Valider</Button>
+            <div className="flex flex-1 items-stretch">
+              <span className="flex items-center rounded-l-lg border border-r-0 border-border bg-muted px-3 text-sm text-muted-foreground">
+                CARD-
+              </span>
+              <Input
+                id="card-number-input"
+                value={cardNumberInput}
+                onChange={handleCardNumberDigitsChange}
+                placeholder="00001"
+                autoFocus
+                className="rounded-l-none"
+              />
+            </div>
+            <Button type="submit" disabled={cardNumberInput.length === 0}>
+              Valider
+            </Button>
           </div>
         </form>
       )}
