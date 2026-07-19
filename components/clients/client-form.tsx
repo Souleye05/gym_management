@@ -32,11 +32,13 @@ export function ClientForm({
   onSubmit,
   onCancel,
   submitLabel,
+  serverError,
 }: {
   initialValues?: Pick<Client, 'name' | 'phone' | 'email'>
   onSubmit: (values: ClientFormValues) => void
   onCancel: () => void
   submitLabel: string
+  serverError?: string
 }) {
   const [name, setName] = useState(initialValues?.name ?? '')
   const [phone, setPhone] = useState(initialValues?.phone ?? '')
@@ -101,6 +103,11 @@ export function ClientForm({
           </p>
         )}
       </div>
+      {serverError && (
+        <p role="alert" className="text-sm text-destructive">
+          {serverError}
+        </p>
+      )}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           Annuler

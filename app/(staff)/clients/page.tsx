@@ -2,7 +2,7 @@
 
 import { Plus, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -12,7 +12,6 @@ import { ClientForm } from '@/components/clients/client-form'
 import { ClientStatusBadge } from '@/components/clients/client-status-badge'
 import { useClientStatus } from '@/components/clients/use-client-status'
 import { useClients } from '@/components/providers/clients-provider'
-import type { ClientRepository } from '@/lib/clients/repository'
 import type { Client, ClientStatus } from '@/lib/clients/types'
 
 const STATUS_FILTERS: { value: ClientStatus | 'all'; label: string }[] = [
@@ -23,18 +22,6 @@ const STATUS_FILTERS: { value: ClientStatus | 'all'; label: string }[] = [
   { value: 'suspended', label: 'Suspendu' },
   { value: 'none', label: 'Aucun abonnement' },
 ]
-
-function useFilteredClients(clients: Client[], clientRepository: ClientRepository, query: string) {
-  // Status filtering must happen per-row via useClientStatus (a hook, so it cannot be called
-  // inside a plain .filter() callback). This page therefore filters by name/phone only here,
-  // and applies the status filter as a second pass using a non-hook status lookup helper is not
-  // possible without hooks — instead, status filtering renders all query-matched rows and hides
-  // non-matching ones via a wrapper component. See StatusFilteredRow below.
-  return useMemo(() => {
-    if (query.trim().length === 0) return clients
-    return clientRepository.search(query)
-  }, [clients, clientRepository, query])
-}
 
 function StatusFilteredRow({
   client,
@@ -68,16 +55,60 @@ function StatusFilteredRow({
 
 export default function ClientsPage() {
   const router = useRouter()
-  const { clients, addClient, clientRepository } = useClients()
+  const { clients, isLoading, isError, refetch, addClient, clientRepository } = useClients()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<ClientStatus | 'all'>('all')
   const [createOpen, setCreateOpen] = useState(false)
+  const [createError, setCreateError] = useState<string | undefined>(undefined)
 
-  const queryFiltered = useFilteredClients(clients, clientRepository, query)
+  const [searchResults, setSearchResults] = useState<Client[] | null>(null)
+  const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (trimmed.length === 0) {
+      setSearchResults(null)
+      return
+    }
+    const requestId = ++requestIdRef.current
+    clientRepository.search(trimmed).then((results) => {
+      if (requestIdRef.current !== requestId) return
+      setSearchResults(results)
+    })
+  }, [clientRepository, query])
+
+  const queryFiltered = searchResults ?? clients
 
   const handleCreate = (values: { name: string; phone: string; email?: string }) => {
-    addClient(values)
-    setCreateOpen(false)
+    setCreateError(undefined)
+    addClient(values, {
+      onSuccess: () => setCreateOpen(false),
+      onError: (message) => setCreateError(message),
+    })
+  }
+
+  const handleOpenCreate = () => {
+    setCreateError(undefined)
+    setCreateOpen(true)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-sm text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <p className="text-sm text-muted-foreground">Impossible de charger la liste des clients.</p>
+        <Button variant="outline" onClick={refetch}>
+          Réessayer
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -91,7 +122,7 @@ export default function ClientsPage() {
         </div>
         <Button
           className="bg-gradient-brand text-primary-foreground sm:w-auto"
-          onClick={() => setCreateOpen(true)}
+          onClick={handleOpenCreate}
         >
           <Plus className="size-4" />
           Ajouter un client
@@ -162,6 +193,7 @@ export default function ClientsPage() {
           onSubmit={handleCreate}
           onCancel={() => setCreateOpen(false)}
           submitLabel="Créer"
+          serverError={createError}
         />
       </Dialog>
     </div>

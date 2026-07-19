@@ -11,7 +11,7 @@ import { Dialog, DialogDescription, DialogHeader, DialogTitle } from '@/componen
 import { EmptyState } from '@/components/ui/empty-state'
 import { ClientForm } from '@/components/clients/client-form'
 import { ClientStatusBadge } from '@/components/clients/client-status-badge'
-import { DeleteClientDialog } from '@/components/clients/delete-client-dialog'
+import { DeactivateClientDialog } from '@/components/clients/deactivate-client-dialog'
 import { useClientStatus } from '@/components/clients/use-client-status'
 import { SubscriptionConfirmation } from '@/components/subscriptions/subscription-confirmation'
 import { SubscriptionForm } from '@/components/subscriptions/subscription-form'
@@ -38,12 +38,13 @@ function planLabel(planId: PlanId): string {
 export default function ClientProfilePage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { getClient, updateClient, deleteClient } = useClients()
+  const { getClient, updateClient, deactivateClient, isLoading: clientsLoading } = useClients()
   const { getCurrentSubscription, getSubscriptionHistory, createSubscription, renewSubscription, suspendSubscription, reactivateSubscription } =
     useSubscriptions()
   const { getSessionsForClient, recordSubscriberSession } = useSessions()
   const [editOpen, setEditOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [editError, setEditError] = useState<string | undefined>(undefined)
+  const [deactivateOpen, setDeactivateOpen] = useState(false)
   const [subscriptionFormOpen, setSubscriptionFormOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<Subscription | null>(null)
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false)
@@ -52,6 +53,14 @@ export default function ClientProfilePage() {
 
   const client = getClient(params.id)
   const clientStatus = useClientStatus(params.id)
+
+  if (clientsLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <p className="text-sm text-muted-foreground">Chargement…</p>
+      </div>
+    )
+  }
 
   if (!client) {
     return (
@@ -74,13 +83,17 @@ export default function ClientProfilePage() {
   const sessionEligibility = checkSessionEligibility(currentSubscription)
 
   const handleUpdate = (values: { name: string; phone: string; email?: string }) => {
-    updateClient(client.id, values)
-    setEditOpen(false)
+    setEditError(undefined)
+    updateClient(client.id, values, {
+      onSuccess: () => setEditOpen(false),
+      onError: (message) => setEditError(message),
+    })
   }
 
-  const handleDelete = () => {
-    deleteClient(client.id)
-    router.push('/clients')
+  const handleDeactivate = () => {
+    deactivateClient(client.id, {
+      onSuccess: () => router.push('/clients'),
+    })
   }
 
   const handleSubscriptionSubmit = (values: { planId: PlanId; paymentMethod: PaymentMethod }) => {
@@ -140,9 +153,9 @@ export default function ClientProfilePage() {
                 <Pencil className="size-4" />
                 Modifier
               </Button>
-              <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+              <Button variant="destructive" onClick={() => setDeactivateOpen(true)}>
                 <Trash2 className="size-4" />
-                Supprimer
+                Désactiver
               </Button>
             </div>
           </div>
@@ -258,14 +271,15 @@ export default function ClientProfilePage() {
           onSubmit={handleUpdate}
           onCancel={() => setEditOpen(false)}
           submitLabel="Enregistrer"
+          serverError={editError}
         />
       </Dialog>
 
-      <DeleteClientDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+      <DeactivateClientDialog
+        open={deactivateOpen}
+        onOpenChange={setDeactivateOpen}
         clientName={client.name}
-        onConfirm={handleDelete}
+        onConfirm={handleDeactivate}
       />
 
       <Dialog open={subscriptionFormOpen} onOpenChange={setSubscriptionFormOpen}>
