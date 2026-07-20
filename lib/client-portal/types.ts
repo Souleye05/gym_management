@@ -8,7 +8,7 @@ export type MyProfile = {
     phone: string
     cardNumber: string
   }
-  subscription: Subscription | undefined
+  subscription: Subscription | null
   subscriptionStatus: ClientStatus
   subscriptionHistory: Subscription[]
   sessionHistory: SubscriberSession[]
