@@ -6,9 +6,18 @@ import type { ListActivePagination } from '../repositories/client.repository'
 
 export type ListClientsResult = { clients: Client[]; total?: number }
 
+export type GetClientOptions = { activeOnly: boolean }
+
 export interface ClientService {
   createClient(input: CreateClientDto): Promise<Result<Client, ClientDomainError>>
-  getClient(id: string): Promise<Result<Client, ClientDomainError>>
+  /**
+   * `activeOnly` (default true) excludes deactivated clients, returning `not-found` for one —
+   * the behavior every existing caller relies on. Pass `{ activeOnly: false }` to resolve a
+   * client regardless of status, e.g. to display a deactivated client's name on their own old
+   * records: deactivation soft-deletes for the active roster, it must not make the underlying
+   * data unreachable everywhere.
+   */
+  getClient(id: string, options?: GetClientOptions): Promise<Result<Client, ClientDomainError>>
   /**
    * Query present → substring search on name/phone, `total` absent (search has no true
    * pagination — a derived total would misleadingly imply one).

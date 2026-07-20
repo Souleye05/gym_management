@@ -10,8 +10,11 @@ export async function getClientController(req: NextRequest, id: string): Promise
   if (!auth.ok) return auth.response
 
   return withInternalErrorHandling(async () => {
+    const { searchParams } = new URL(req.url)
+    const includeInactive = searchParams.get('includeInactive') === 'true'
+
     const { clientService } = getContainer()
-    const result = await clientService.getClient(id)
+    const result = await clientService.getClient(id, { activeOnly: !includeInactive })
 
     if (!result.ok) {
       return NextResponse.json(apiFailureFromClientDomainError(result.error), {

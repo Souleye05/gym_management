@@ -7,6 +7,7 @@ import { cleanAuthTables } from '../../auth/infrastructure/test-helpers/clean-db
 import { staffLoginController } from '../../auth/http/staff-login.controller'
 import { cleanClientsTable } from '../infrastructure/test-helpers/clean-clients-table'
 import { createClientController } from './create-client.controller'
+import { deactivateClientController } from './deactivate-client.controller'
 import { getClientController } from './get-client.controller'
 
 async function staffAccessTokenCookie(): Promise<string> {
@@ -35,8 +36,8 @@ function postRequest(body: unknown, cookie: string): NextRequest {
   })
 }
 
-function getRequest(cookie: string): NextRequest {
-  return new NextRequest('https://example.com/api/clients/x', { headers: { cookie } })
+function getRequest(cookie: string, query = ''): NextRequest {
+  return new NextRequest(`https://example.com/api/clients/x${query}`, { headers: { cookie } })
 }
 
 beforeEach(async () => {
@@ -69,5 +70,32 @@ describe('getClientController', () => {
     const res = await getClientController(getRequest(cookie), 'does-not-exist')
 
     expect(res.status).toBe(404)
+  })
+
+  it('returns 404 for a deactivated client by default', async () => {
+    const cookie = await staffAccessTokenCookie()
+    const createRes = await createClientController(postRequest({ name: 'Marc Delaunay', phone: '+33612345602' }, cookie))
+    const created = (await createRes.json()).data.client
+    await deactivateClientController(getRequest(cookie), created.id)
+
+    const res = await getClientController(getRequest(cookie), created.id)
+
+    expect(res.status).toBe(404)
+  })
+
+  it('returns a deactivated client when ?includeInactive=true is passed', async () => {
+    // Lets a deactivated client's own historical records (e.g. past sessions) still resolve
+    // their name — deactivation must not make the underlying data unreachable everywhere.
+    const cookie = await staffAccessTokenCookie()
+    const createRes = await createClientController(postRequest({ name: 'Marc Delaunay', phone: '+33612345602' }, cookie))
+    const created = (await createRes.json()).data.client
+    await deactivateClientController(getRequest(cookie), created.id)
+
+    const res = await getClientController(getRequest(cookie, '?includeInactive=true'), created.id)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.data.client.id).toBe(created.id)
+    expect(json.data.client.isActive).toBe(false)
   })
 })

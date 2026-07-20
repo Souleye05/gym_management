@@ -10,7 +10,7 @@ import {
 } from '../repositories/client.repository'
 import { parseCardNumber } from '../infrastructure/format-card-number'
 import { guardAgainstLeakingInternals } from '../../shared/guard-against-leaking-internals'
-import type { ClientService, ListClientsResult } from './client.service'
+import type { ClientService, GetClientOptions, ListClientsResult } from './client.service'
 
 const SOURCE = 'ClientService'
 
@@ -44,10 +44,13 @@ export class DefaultClientService implements ClientService {
     })
   }
 
-  async getClient(id: string): Promise<Result<Client, ClientDomainError>> {
+  async getClient(
+    id: string,
+    options: GetClientOptions = { activeOnly: true },
+  ): Promise<Result<Client, ClientDomainError>> {
     return guardAgainstLeakingInternals(SOURCE, async () => {
       const client = await this.clientRepository.findById(id)
-      if (!client || !client.isActive) return err(NOT_FOUND)
+      if (!client || (options.activeOnly && !client.isActive)) return err(NOT_FOUND)
       return ok(client)
     })
   }

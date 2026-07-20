@@ -117,6 +117,32 @@ describe('DefaultClientService.getClient', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error.code).toBe('not-found')
   })
+
+  it('returns a deactivated client when activeOnly is false', async () => {
+    // Historical display use case (e.g. resolving a client's name on their own old session
+    // records after they've been deactivated) — deactivation soft-deletes for the active
+    // roster, it must not make the client's data unreachable everywhere.
+    const deactivated: Client = { ...CLIENT, isActive: false }
+    const repository = fakeClientRepository({ findById: async (id) => (id === deactivated.id ? deactivated : null) })
+    const service = new DefaultClientService(repository)
+
+    const result = await service.getClient('c1', { activeOnly: false })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.id).toBe('c1')
+      expect(result.value.isActive).toBe(false)
+    }
+  })
+
+  it('still returns not-found for a nonexistent id when activeOnly is false', async () => {
+    const service = new DefaultClientService(fakeClientRepository())
+
+    const result = await service.getClient('missing', { activeOnly: false })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('not-found')
+  })
 })
 
 describe('DefaultClientService.listClients', () => {
