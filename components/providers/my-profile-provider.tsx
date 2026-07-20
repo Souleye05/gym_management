@@ -4,8 +4,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { createContext, useContext, type ReactNode } from 'react'
 import { fetchMyClientProfile } from '@/lib/client-portal/fetch-my-profile'
-import { mockMyProfile } from '@/lib/client-portal/mock-my-profile'
+import { computeSubscriptionStatus } from '@/lib/subscriptions/status'
 import type { MyProfile } from '@/lib/client-portal/types'
+import type { ClientStatus } from '@/lib/clients/types'
 
 type MyProfileState =
   | { status: 'loading' }
@@ -30,12 +31,17 @@ export function MyProfileProvider({ children }: { children: ReactNode }) {
   } else if (query.data.kind === 'not-linked') {
     state = { status: 'no-profile' }
   } else {
+    const { client, subscription, subscriptionHistory, sessionHistory } = query.data
+    const subscriptionStatus: ClientStatus = subscription
+      ? computeSubscriptionStatus(subscription)
+      : 'none'
+
     const profile: MyProfile = {
-      client: query.data.client,
-      subscription: mockMyProfile.subscription,
-      subscriptionStatus: mockMyProfile.subscriptionStatus,
-      subscriptionHistory: mockMyProfile.subscriptionHistory,
-      sessionHistory: mockMyProfile.sessionHistory,
+      client,
+      subscription,
+      subscriptionStatus,
+      subscriptionHistory,
+      sessionHistory,
     }
     state = { status: 'ready', profile }
   }
