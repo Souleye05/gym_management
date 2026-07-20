@@ -96,7 +96,6 @@ export default function ClientHomePage() {
         name={profile.client.name}
         status={profile.subscriptionStatus}
         subscription={profile.subscription}
-        demo
       />
       <DigitalCardSection cardNumber={profile.client.cardNumber} />
       <HistoryList
@@ -104,14 +103,12 @@ export default function ClientHomePage() {
         title="Historique paiements"
         rows={paymentHistoryRows}
         emptyMessage="Aucun historique pour l'instant."
-        demo
       />
       <HistoryList
         icon={CalendarClock}
         title="Historique séances"
         rows={sessionHistoryRows}
         emptyMessage="Aucune séance pour l'instant."
-        demo
       />
     </div>
   )

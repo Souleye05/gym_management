@@ -17,7 +17,7 @@ export function SubscriptionStatusSection({
 }: {
   name: string
   status: ClientStatus
-  subscription: Subscription | undefined
+  subscription: Subscription | null
   demo?: boolean
 }) {
   return (
