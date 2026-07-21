@@ -2,7 +2,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { CalendarClock, CreditCard, Pencil, RefreshCw, Trash2, Users } from 'lucide-react'
+import { CalendarClock, CreditCard, Pencil, RefreshCw, Trash2, UserX, Users } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
@@ -190,6 +190,12 @@ export default function ClientProfilePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {!client.isActive && (
+        <div className="flex items-center gap-2 rounded-xl border border-warning/20 bg-warning/10 px-4 py-2.5 text-sm text-warning">
+          <UserX className="size-4 shrink-0" />
+          <span>Ce client est désactivé — consultation seule.</span>
+        </div>
+      )}
       <Card>
         <CardContent className="flex flex-col gap-4 pt-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
@@ -214,10 +220,12 @@ export default function ClientProfilePage() {
                 <Pencil className="size-4" />
                 Modifier
               </Button>
-              <Button variant="destructive" onClick={handleOpenDeactivate}>
-                <Trash2 className="size-4" />
-                Désactiver
-              </Button>
+              {client.isActive && (
+                <Button variant="destructive" onClick={handleOpenDeactivate}>
+                  <Trash2 className="size-4" />
+                  Désactiver
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -230,9 +238,11 @@ export default function ClientProfilePage() {
               <CalendarClock className="size-4" />
               Historique des séances
             </CardTitle>
-            <Button size="sm" variant="outline" onClick={handleRecordSession}>
-              Enregistrer une séance
-            </Button>
+            {client.isActive && (
+              <Button size="sm" variant="outline" onClick={handleRecordSession}>
+                Enregistrer une séance
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {sessionHistory.length === 0 ? (
@@ -274,28 +284,32 @@ export default function ClientProfilePage() {
                 <p className="text-xs text-muted-foreground">
                   {currency(currentSubscription.amountPaid)} payé
                 </p>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setSubscriptionFormOpen(true)}>
-                    <RefreshCw className="size-4" />
-                    Renouveler
-                  </Button>
-                  {currentSubscription.suspended ? (
-                    <Button size="sm" variant="outline" onClick={handleReactivate}>
-                      Réactiver
+                {client.isActive && (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setSubscriptionFormOpen(true)}>
+                      <RefreshCw className="size-4" />
+                      Renouveler
                     </Button>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={handleSuspend}>
-                      Suspendre
-                    </Button>
-                  )}
-                </div>
+                    {currentSubscription.suspended ? (
+                      <Button size="sm" variant="outline" onClick={handleReactivate}>
+                        Réactiver
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={handleSuspend}>
+                        Suspendre
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <p className="text-sm text-muted-foreground">Aucun abonnement actif.</p>
-                <Button size="sm" onClick={() => setSubscriptionFormOpen(true)}>
-                  Créer un abonnement
-                </Button>
+                {client.isActive && (
+                  <Button size="sm" onClick={() => setSubscriptionFormOpen(true)}>
+                    Créer un abonnement
+                  </Button>
+                )}
               </div>
             )}
 

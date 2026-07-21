@@ -68,14 +68,16 @@ export async function findClientByCardNumberRequest(cardNumber: string): Promise
 }
 
 /**
- * Fallback single-client lookup used when a client isn't present in the (paginated) in-memory
- * clients list — e.g. an active client beyond the first page. Unlike the other request helpers,
- * this treats a failed envelope (including a 404 "not found") as an expected, non-exceptional
- * `undefined` result rather than throwing, since callers use this purely to double-check before
- * concluding a client truly doesn't exist.
+ * Fallback single-client lookup used when a client isn't present in the (paginated, active-only)
+ * in-memory clients list — e.g. an active client beyond the first page, or a deactivated client
+ * (always requests `includeInactive=true`, since every current caller needs to resolve a
+ * deactivated client's details, never just confirm they're gone). Unlike the other request
+ * helpers, this treats a failed envelope (including a genuine 404 "not found") as an expected,
+ * non-exceptional `undefined` result rather than throwing, since callers use this purely to
+ * double-check before concluding a client truly doesn't exist.
  */
 export async function getClientByIdRequest(id: string): Promise<Client | undefined> {
-  const response = await fetch(`/api/clients/${id}`)
+  const response = await fetch(`/api/clients/${id}?includeInactive=true`)
   let envelope: ApiEnvelope<{ client: Client }>
   try {
     envelope = await response.json()
