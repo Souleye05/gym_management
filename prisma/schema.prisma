@@ -145,6 +145,14 @@ model Session {
   @@map("sessions")
 }
 
+model AppSettings {
+  id           String   @id @default("singleton")
+  sessionPrice Int
+  updatedAt    DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
 model RefreshToken {
   id              String    @id @default(cuid())
   tokenHash       String    @unique
