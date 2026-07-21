@@ -1,9 +1,9 @@
 import type { Role } from '../../auth/domain/enums'
 
-export type Permission = 'client:list' | 'client:read' | 'client:create' | 'client:update' | 'client:deactivate'
+export type Permission = 'client:list' | 'client:read' | 'client:create' | 'client:update' | 'client:deactivate' | 'settings:update'
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  ADMIN: ['client:list', 'client:read', 'client:create', 'client:update', 'client:deactivate'],
+  ADMIN: ['client:list', 'client:read', 'client:create', 'client:update', 'client:deactivate', 'settings:update'],
   AGENT: ['client:list', 'client:read', 'client:create', 'client:update'],
 }
 

@@ -17,4 +17,9 @@ describe('hasPermission', () => {
     expect(hasPermission('AGENT', 'client:update')).toBe(true)
     expect(hasPermission('AGENT', 'client:deactivate')).toBe(false)
   })
+
+  it('grants ADMIN settings:update, denies it to AGENT', () => {
+    expect(hasPermission('ADMIN', 'settings:update')).toBe(true)
+    expect(hasPermission('AGENT', 'settings:update')).toBe(false)
+  })
 })
