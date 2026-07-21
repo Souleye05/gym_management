@@ -63,6 +63,9 @@ function fakeSubscriptionRepository(overrides: Partial<SubscriptionRepository> =
 function fakeSessionRepository(overrides: Partial<SessionRepository> = {}): SessionRepository {
   return {
     findRecentByClientId: async () => [],
+    create: async () => {
+      throw new Error('fakeSessionRepository.create should not be called by DefaultClientHistoryService')
+    },
     ...overrides,
   }
 }
