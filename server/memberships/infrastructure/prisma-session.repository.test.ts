@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { prismaClient } from '../../shared/prisma-client'
-import { cleanClientPortalHistoryTables } from './test-helpers/clean-client-portal-history-tables'
+import { cleanMembershipsTables } from './test-helpers/clean-memberships-tables'
 import { cleanClientsTable } from '../../clients/infrastructure/test-helpers/clean-clients-table'
 import { createTestClient } from './test-helpers/create-test-client'
 import { PrismaSessionRepository } from './prisma-session.repository'
@@ -8,7 +8,7 @@ import { PrismaSessionRepository } from './prisma-session.repository'
 const repository = new PrismaSessionRepository(prismaClient)
 
 beforeEach(async () => {
-  await cleanClientPortalHistoryTables()
+  await cleanMembershipsTables()
   await cleanClientsTable()
 })
 

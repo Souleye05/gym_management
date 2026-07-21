@@ -19,10 +19,10 @@ import type { RefreshTokenLookupService } from '../auth/services/refresh-token-l
 import { PrismaClientRepository } from '../clients/infrastructure/prisma-client.repository'
 import { DefaultClientService } from '../clients/services/default-client.service'
 import type { ClientService } from '../clients/services/client.service'
-import { PrismaSubscriptionRepository } from '../client-portal-history/infrastructure/prisma-subscription.repository'
-import { PrismaSessionRepository } from '../client-portal-history/infrastructure/prisma-session.repository'
-import { DefaultClientHistoryService } from '../client-portal-history/services/default-client-history.service'
-import type { ClientHistoryService } from '../client-portal-history/services/client-history.service'
+import { PrismaSubscriptionRepository } from '../memberships/infrastructure/prisma-subscription.repository'
+import { PrismaSessionRepository } from '../memberships/infrastructure/prisma-session.repository'
+import { DefaultClientHistoryService } from '../memberships/services/default-client-history.service'
+import type { ClientHistoryService } from '../memberships/services/client-history.service'
 
 export type Container = {
   staffAuthService: StaffAuthService

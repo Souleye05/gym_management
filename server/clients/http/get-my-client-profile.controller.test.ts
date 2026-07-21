@@ -6,8 +6,8 @@ import { cleanAuthTables } from '../../auth/infrastructure/test-helpers/clean-db
 import { clientRequestOtpController } from '../../auth/http/client-request-otp.controller'
 import { clientVerifyOtpController } from '../../auth/http/client-verify-otp.controller'
 import { cleanClientsTable } from '../infrastructure/test-helpers/clean-clients-table'
-import { cleanClientPortalHistoryTables } from '../../client-portal-history/infrastructure/test-helpers/clean-client-portal-history-tables'
-import type { Session } from '../../client-portal-history/domain/entities'
+import { cleanMembershipsTables } from '../../memberships/infrastructure/test-helpers/clean-memberships-tables'
+import type { Session } from '../../memberships/domain/entities'
 import { getMyClientProfileController, toApiSession } from './get-my-client-profile.controller'
 
 const SIMULATED_OTP_CODE = '123456'
@@ -37,7 +37,7 @@ function profileRequest(cookie: string): NextRequest {
 
 beforeEach(async () => {
   await cleanAuthTables()
-  await cleanClientPortalHistoryTables()
+  await cleanMembershipsTables()
   await cleanClientsTable()
 })
 

@@ -4,7 +4,7 @@ import { apiSuccess } from '../../shared/api-response'
 import { getContainer } from '../../shared/container'
 import { withInternalErrorHandling } from '../../shared/with-internal-error-handling'
 import { requireClientAuth } from '../../auth/http/require-client-auth'
-import type { PlanId, PaymentMethod, Subscription, Session } from '../../client-portal-history/domain/entities'
+import type { PlanId, PaymentMethod, Subscription, Session } from '../../memberships/domain/entities'
 
 // The domain layer mirrors the Prisma schema's UPPERCASE enum values. The frontend
 // (lib/subscriptions/types.ts, lib/sessions/types.ts) expects lowercase string unions.
