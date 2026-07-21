@@ -23,6 +23,13 @@ import { PrismaSubscriptionRepository } from '../memberships/infrastructure/pris
 import { PrismaSessionRepository } from '../memberships/infrastructure/prisma-session.repository'
 import { DefaultClientHistoryService } from '../memberships/services/default-client-history.service'
 import type { ClientHistoryService } from '../memberships/services/client-history.service'
+import { PrismaSettingsRepository } from '../settings/infrastructure/prisma-settings.repository'
+import { DefaultSettingsService } from '../settings/services/default-settings.service'
+import type { SettingsService } from '../settings/services/settings.service'
+import { DefaultStaffSubscriptionService } from '../memberships/services/default-staff-subscription.service'
+import type { StaffSubscriptionService } from '../memberships/services/staff-subscription.service'
+import { DefaultStaffSessionService } from '../memberships/services/default-staff-session.service'
+import type { StaffSessionService } from '../memberships/services/staff-session.service'
 
 export type Container = {
   staffAuthService: StaffAuthService
@@ -30,6 +37,9 @@ export type Container = {
   refreshTokenLookupService: RefreshTokenLookupService
   clientService: ClientService
   clientHistoryService: ClientHistoryService
+  staffSubscriptionService: StaffSubscriptionService
+  staffSessionService: StaffSessionService
+  settingsService: SettingsService
 }
 
 function createContainer(): Container {
@@ -80,7 +90,13 @@ function createContainer(): Container {
   const sessionRepository = new PrismaSessionRepository(prismaClient)
   const clientHistoryService = new DefaultClientHistoryService(subscriptionRepository, sessionRepository)
 
-  return { staffAuthService, clientAuthService, refreshTokenLookupService, clientService, clientHistoryService }
+  const settingsRepository = new PrismaSettingsRepository(prismaClient)
+  const settingsService = new DefaultSettingsService(settingsRepository)
+
+  const staffSubscriptionService = new DefaultStaffSubscriptionService(subscriptionRepository, clientService)
+  const staffSessionService = new DefaultStaffSessionService(subscriptionRepository, sessionRepository, clientService, settingsService)
+
+  return { staffAuthService, clientAuthService, refreshTokenLookupService, clientService, clientHistoryService, staffSubscriptionService, staffSessionService, settingsService }
 }
 
 declare global {
