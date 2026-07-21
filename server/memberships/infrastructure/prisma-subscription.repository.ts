@@ -1,6 +1,6 @@
 import type { PrismaClient as PrismaClientType } from '../../../lib/generated/prisma/client'
 import { PAYMENT_METHODS, PLAN_IDS, type Subscription } from '../domain/entities'
-import type { SubscriptionRepository } from '../repositories/subscription.repository'
+import type { CreateSubscriptionInput, SubscriptionRepository } from '../repositories/subscription.repository'
 import { validateEnum } from './validate-enum'
 
 type PrismaSubscriptionRow = {
@@ -42,5 +42,30 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
       orderBy: [{ endDate: 'desc' }, { id: 'asc' }],
     })
     return rows.map(toDomain)
+  }
+
+  async findById(id: string): Promise<Subscription | null> {
+    const row = await this.prisma.subscription.findUnique({ where: { id } })
+    return row ? toDomain(row) : null
+  }
+
+  async create(input: CreateSubscriptionInput): Promise<Subscription> {
+    const row = await this.prisma.subscription.create({
+      data: {
+        clientId: input.clientId,
+        planId: input.planId,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        amountPaid: input.amountPaid,
+        paymentMethod: input.paymentMethod,
+        createdByStaffId: input.createdByStaffId,
+      },
+    })
+    return toDomain(row)
+  }
+
+  async setSuspended(id: string, suspended: boolean): Promise<Subscription> {
+    const row = await this.prisma.subscription.update({ where: { id }, data: { suspended } })
+    return toDomain(row)
   }
 }

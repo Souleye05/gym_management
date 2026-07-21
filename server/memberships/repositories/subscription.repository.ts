@@ -1,4 +1,14 @@
-import type { Subscription } from '../domain/entities'
+import type { PaymentMethod, PlanId, Subscription } from '../domain/entities'
+
+export type CreateSubscriptionInput = {
+  clientId: string
+  planId: PlanId
+  startDate: Date
+  endDate: Date
+  amountPaid: number
+  paymentMethod: PaymentMethod
+  createdByStaffId: string
+}
 
 export interface SubscriptionRepository {
   /**
@@ -10,4 +20,7 @@ export interface SubscriptionRepository {
    * is still valid ("current"); that's the service's job.
    */
   findAllByClientId(clientId: string): Promise<Subscription[]>
+  findById(id: string): Promise<Subscription | null>
+  create(input: CreateSubscriptionInput): Promise<Subscription>
+  setSuspended(id: string, suspended: boolean): Promise<Subscription>
 }
