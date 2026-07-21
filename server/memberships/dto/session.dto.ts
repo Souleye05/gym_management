@@ -1,8 +1,9 @@
 import { z } from 'zod'
+import type { PaymentMethod } from '../domain/entities'
 
 const API_PAYMENT_METHODS = ['cash', 'card', 'mobile_money'] as const
 
-const API_TO_PAYMENT_METHOD: Record<(typeof API_PAYMENT_METHODS)[number], 'CASH' | 'CARD' | 'MOBILE_MONEY'> = {
+const API_TO_PAYMENT_METHOD: Record<(typeof API_PAYMENT_METHODS)[number], PaymentMethod> = {
   cash: 'CASH',
   card: 'CARD',
   mobile_money: 'MOBILE_MONEY',
@@ -21,13 +22,13 @@ const PHONE_PATTERN = /^\+\d{8,15}$/
 
 export const RecordVisitorSessionSchema = z
   .object({
-    visitorName: z.string().trim().min(1, { message: 'Le nom est requis' }),
-    visitorPhone: z.string().regex(PHONE_PATTERN, { message: 'Numéro de téléphone invalide' }),
+    fullName: z.string().trim().min(1, { message: 'Le nom est requis' }),
+    phoneNumber: z.string().regex(PHONE_PATTERN, { message: 'Numéro de téléphone invalide' }),
     paymentMethod: z.enum(API_PAYMENT_METHODS, { message: 'paymentMethod invalide' }),
   })
   .transform((input) => ({
-    visitorName: input.visitorName,
-    visitorPhone: input.visitorPhone,
+    visitorName: input.fullName,
+    visitorPhone: input.phoneNumber,
     paymentMethod: API_TO_PAYMENT_METHOD[input.paymentMethod],
   }))
 

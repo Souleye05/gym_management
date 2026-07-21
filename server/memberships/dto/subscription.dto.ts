@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { PLAN_IDS } from '../domain/entities'
+import { PLAN_IDS, type PaymentMethod } from '../domain/entities'
 
 const API_PLAN_IDS = ['monthly', 'quarterly', 'biannual', 'annual'] as const
 const API_PAYMENT_METHODS = ['cash', 'card', 'mobile_money'] as const
@@ -11,7 +11,7 @@ const API_TO_PLAN_ID: Record<(typeof API_PLAN_IDS)[number], (typeof PLAN_IDS)[nu
   annual: 'ANNUAL',
 }
 
-const API_TO_PAYMENT_METHOD: Record<(typeof API_PAYMENT_METHODS)[number], 'CASH' | 'CARD' | 'MOBILE_MONEY'> = {
+const API_TO_PAYMENT_METHOD: Record<(typeof API_PAYMENT_METHODS)[number], PaymentMethod> = {
   cash: 'CASH',
   card: 'CARD',
   mobile_money: 'MOBILE_MONEY',

@@ -54,21 +54,21 @@ describe('recordVisitorSessionController', () => {
     const cookie = await adminCookie()
 
     const res = await recordVisitorSessionController(
-      sessionRequest({ visitorName: 'Nadia Ferrand', visitorPhone: '+33698765432', paymentMethod: 'cash' }, cookie),
+      sessionRequest({ fullName: 'Nadia Ferrand', phoneNumber: '+33698765432', paymentMethod: 'cash' }, cookie),
     )
     const json = await res.json()
 
     expect(res.status).toBe(201)
     expect(json.data.session.type).toBe('visitor')
-    expect(json.data.session.visitorName).toBe('Nadia Ferrand')
+    expect(json.data.session.fullName).toBe('Nadia Ferrand')
     expect(json.data.session.amountPaid).toBe(8)
   })
 
-  it('returns 400 for an invalid visitorPhone', async () => {
+  it('returns 400 for an invalid phoneNumber', async () => {
     const cookie = await adminCookie()
 
     const res = await recordVisitorSessionController(
-      sessionRequest({ visitorName: 'Nadia Ferrand', visitorPhone: '0612345678', paymentMethod: 'cash' }, cookie),
+      sessionRequest({ fullName: 'Nadia Ferrand', phoneNumber: '0612345678', paymentMethod: 'cash' }, cookie),
     )
 
     expect(res.status).toBe(400)

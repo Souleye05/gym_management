@@ -33,8 +33,7 @@ export class DefaultStaffSessionService implements StaffSessionService {
       if (!clientResult.ok) return err(CLIENT_NOT_FOUND)
 
       const subscriptions = await this.subscriptionRepository.findAllByClientId(input.clientId)
-      const latest = subscriptions[0] ?? null
-      const eligibility = checkSessionEligibility(latest, new Date())
+      const eligibility = checkSessionEligibility(subscriptions, new Date())
       if (!eligibility.allowed) {
         return err({ code: 'session-ineligible', message: INELIGIBLE_MESSAGES[eligibility.reason], reason: eligibility.reason })
       }

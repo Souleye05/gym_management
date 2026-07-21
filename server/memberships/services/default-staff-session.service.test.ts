@@ -205,6 +205,27 @@ describe('DefaultStaffSessionService.recordSubscriberSession', () => {
     if (!result.ok) expect(result.error.code).toBe('session-ineligible')
   })
 
+  it('succeeds when there is a valid current subscription plus a future early-renewal', async () => {
+    const validCurrent: Subscription = VALID_SUBSCRIPTION
+    const futureRenewal: Subscription = {
+      ...VALID_SUBSCRIPTION,
+      id: 'sub2',
+      startDate: new Date(Date.now() + 80 * 24 * 60 * 60 * 1000),
+      endDate: new Date(Date.now() + 170 * 24 * 60 * 60 * 1000),
+    }
+    const service = new DefaultStaffSessionService(
+      // future sorts first, matching real endDate desc ordering from the repository
+      fakeSubscriptionRepository({ findAllByClientId: async () => [futureRenewal, validCurrent] }),
+      fakeSessionRepository(),
+      fakeClientService(),
+      fakeSettingsService(),
+    )
+
+    const result = await service.recordSubscriberSession({ clientId: 'c1', paymentMethod: 'CASH', createdByStaffId: 'staff1' })
+
+    expect(result.ok).toBe(true)
+  })
+
   it('never lets a raw repository error message escape recordSubscriberSession', async () => {
     const service = new DefaultStaffSessionService(
       fakeSubscriptionRepository({
