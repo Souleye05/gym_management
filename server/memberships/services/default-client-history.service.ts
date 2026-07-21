@@ -1,4 +1,5 @@
 import { guardAgainstLeakingInternals } from '../../shared/guard-against-leaking-internals'
+import { deriveCurrentSubscription } from '../domain/derive-current-subscription'
 import type { SubscriptionRepository } from '../repositories/subscription.repository'
 import type { SessionRepository } from '../repositories/session.repository'
 import type { ClientHistory, ClientHistoryService } from './client-history.service'
@@ -34,23 +35,7 @@ export class DefaultClientHistoryService implements ClientHistoryService {
         ),
       ])
 
-      // "Current" is a temporal business judgment (is this subscription still valid as of
-      // now?), not a data-access concern — deliberately kept out of the repository layer so
-      // this rule can evolve (grace periods, a future stored status...) without touching
-      // persistence. A suspended-but-unexpired subscription still counts as current; the
-      // active/suspended/expiring distinction is a frontend display concern.
-      //
-      // subscriptions is already ordered by endDate desc (with an id tiebreaker), so the first
-      // entry that has actually started (startDate <= now) is the one with the latest endDate
-      // among started subscriptions — skipping past a not-yet-started future renewal to find the
-      // subscription that's genuinely in effect, rather than assuming the single latest-by-endDate
-      // row is automatically current. No separate findLatestByClientId query is needed: that would
-      // just recompute a value already derivable from this array via an extra round-trip and a
-      // second, non-atomic read of the same table.
-      const now = new Date()
-      const latestStartedSubscription = subscriptions.find((subscription) => subscription.startDate <= now) ?? null
-      const currentSubscription =
-        latestStartedSubscription && latestStartedSubscription.endDate > now ? latestStartedSubscription : null
+      const currentSubscription = deriveCurrentSubscription(subscriptions, new Date())
 
       return { currentSubscription, subscriptions, recentSessions }
     })
