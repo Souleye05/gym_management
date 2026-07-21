@@ -49,6 +49,13 @@ const SESSION: Session = {
 function fakeSubscriptionRepository(overrides: Partial<SubscriptionRepository> = {}): SubscriptionRepository {
   return {
     findAllByClientId: async () => [],
+    findById: async () => null,
+    create: async () => {
+      throw new Error('fakeSubscriptionRepository.create should not be called by DefaultClientHistoryService')
+    },
+    setSuspended: async () => {
+      throw new Error('fakeSubscriptionRepository.setSuspended should not be called by DefaultClientHistoryService')
+    },
     ...overrides,
   }
 }
