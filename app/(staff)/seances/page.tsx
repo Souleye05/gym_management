@@ -1,14 +1,16 @@
 // app/(staff)/seances/page.tsx
 'use client'
 
+import { useQueries } from '@tanstack/react-query'
 import { CalendarDays } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ClientStatusBadge } from '@/components/clients/client-status-badge'
 import { useClientStatus } from '@/components/clients/use-client-status'
@@ -21,12 +23,49 @@ import { useClients } from '@/components/providers/clients-provider'
 import { useSessions } from '@/components/providers/sessions-provider'
 import { useSubscriptions } from '@/components/providers/subscriptions-provider'
 import { checkSessionEligibility } from '@/lib/sessions/eligibility'
+import { getClientByIdRequest } from '@/lib/clients/fetch-clients'
 import type { Client } from '@/lib/clients/types'
 import type { Session } from '@/lib/sessions/types'
 import type { PaymentMethod } from '@/lib/subscriptions/types'
 
 const currency = (value: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value)
+
+type ResolvedSessionClient = { name: string; isLoading: boolean; isInactive: boolean }
+
+// Resolves a subscriber session's clientId to a display name even when the client isn't in the
+// active-only `clients` list (deactivated, or beyond the list's page size). Falls back to a
+// per-id React Query lookup, sharing the exact `['client', id]` cache key that
+// app/(staff)/clients/[id]/page.tsx's own fallback fetch already uses.
+function useResolveSessionClient(
+  clients: Client[],
+  missingClientIds: string[],
+): (clientId: string) => ResolvedSessionClient {
+  const fallbackQueries = useQueries({
+    queries: missingClientIds.map((id) => ({
+      queryKey: ['client', id],
+      queryFn: () => getClientByIdRequest(id),
+    })),
+  })
+
+  return (clientId: string): ResolvedSessionClient => {
+    const listClient = clients.find((c) => c.id === clientId)
+    if (listClient) {
+      return { name: listClient.name, isLoading: false, isInactive: false }
+    }
+
+    const index = missingClientIds.indexOf(clientId)
+    const query = index >= 0 ? fallbackQueries[index] : undefined
+
+    if (!query || query.isLoading) {
+      return { name: '', isLoading: true, isInactive: false }
+    }
+    if (query.data) {
+      return { name: query.data.name, isLoading: false, isInactive: !query.data.isActive }
+    }
+    return { name: 'Client inconnu', isLoading: false, isInactive: false }
+  }
+}
 
 type SubscriberStep = 'identify' | 'payment'
 
@@ -114,7 +153,17 @@ export default function SeancesPage() {
 
   const todaysSessions = getSessionsForToday()
 
-  const clientName = (clientId: string) => clients.find((c) => c.id === clientId)?.name ?? 'Client inconnu'
+  const missingClientIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const session of todaysSessions) {
+      if (session.type === 'subscriber' && !clients.some((c) => c.id === session.clientId)) {
+        ids.add(session.clientId)
+      }
+    }
+    return [...ids]
+  }, [todaysSessions, clients])
+
+  const resolveSessionClient = useResolveSessionClient(clients, missingClientIds)
 
   const openSubscriberDialog = () => {
     setSubscriberStep('identify')
@@ -202,32 +251,46 @@ export default function SeancesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {todaysSessions.map((session) => (
-              <TableRow
-                key={session.id}
-                onClick={session.type === 'subscriber' ? () => router.push(`/clients/${session.clientId}`) : undefined}
-                className={session.type === 'visitor' ? 'cursor-default' : undefined}
-              >
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar name={session.type === 'subscriber' ? clientName(session.clientId) : session.fullName} />
-                    <span className="font-medium">
-                      {session.type === 'subscriber' ? clientName(session.clientId) : session.fullName}
-                    </span>
-                    {session.type === 'visitor' && <Badge variant="muted">Visiteur</Badge>}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {new Date(session.checkedInAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                </TableCell>
-                <TableCell className="text-muted-foreground">{currency(session.amountPaid)}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {session.paymentMethod === 'cash' && 'Espèces'}
-                  {session.paymentMethod === 'card' && 'Carte'}
-                  {session.paymentMethod === 'mobile_money' && 'Mobile Money'}
-                </TableCell>
-              </TableRow>
-            ))}
+            {todaysSessions.map((session) => {
+              const resolved = session.type === 'subscriber' ? resolveSessionClient(session.clientId) : null
+
+              return (
+                <TableRow
+                  key={session.id}
+                  onClick={session.type === 'subscriber' ? () => router.push(`/clients/${session.clientId}`) : undefined}
+                  className={session.type === 'visitor' ? 'cursor-default' : undefined}
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      {resolved?.isLoading ? (
+                        <>
+                          <Skeleton className="size-8 rounded-full" />
+                          <Skeleton className="h-4 w-24" />
+                        </>
+                      ) : (
+                        <>
+                          <Avatar name={session.type === 'subscriber' ? (resolved?.name ?? '') : session.fullName} />
+                          <span className="font-medium">
+                            {session.type === 'subscriber' ? resolved?.name : session.fullName}
+                          </span>
+                          {session.type === 'visitor' && <Badge variant="muted">Visiteur</Badge>}
+                          {resolved?.isInactive && <Badge variant="muted">Désactivé</Badge>}
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(session.checkedInAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{currency(session.amountPaid)}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {session.paymentMethod === 'cash' && 'Espèces'}
+                    {session.paymentMethod === 'card' && 'Carte'}
+                    {session.paymentMethod === 'mobile_money' && 'Mobile Money'}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       )}
