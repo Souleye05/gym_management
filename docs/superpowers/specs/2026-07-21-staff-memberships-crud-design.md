@@ -196,7 +196,7 @@ export function checkSessionEligibility(latest: Subscription | null, now: Date):
   return { allowed: true }
 }
 ```
-Fonction pure du domaine, testable isolément sans repository.
+Fonction pure du domaine, testable isolément sans repository. Choix délibéré : la raison `'none'` recouvre deux cas distincts (jamais eu d'abonnement, ou le dernier abonnement n'a pas encore commencé) plutôt que d'ajouter un 4ᵉ code — le mock n'a jamais ce second cas (ses renouvellements chaînent toujours depuis `max(fin actuelle, maintenant)`), donc aucun message existant ne le distingue ; pas la peine d'inventer une nuance que l'UI ne sait pas encore afficher.
 
 ## `SettingsService`
 
