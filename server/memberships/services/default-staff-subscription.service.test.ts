@@ -84,6 +84,27 @@ describe('DefaultStaffSubscriptionService.createOrRenewSubscription', () => {
     if (!result.ok) expect(result.error.code).toBe('client-not-found')
   })
 
+  it('never calls the subscription repository when the client check fails (fail-fast ordering)', async () => {
+    const service = new DefaultStaffSubscriptionService(
+      fakeSubscriptionRepository({
+        findAllByClientId: async () => {
+          throw new Error('should not be called — client check must run first')
+        },
+      }),
+      fakeClientService({ getClient: async () => err({ code: 'not-found', message: 'Client introuvable.' }) }),
+    )
+
+    const result = await service.createOrRenewSubscription({
+      clientId: 'missing',
+      planId: 'MONTHLY',
+      paymentMethod: 'CASH',
+      createdByStaffId: 'staff1',
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('client-not-found')
+  })
+
   it('starts from now and computes amountPaid/endDate from the plan catalog when the client has no subscriptions', async () => {
     const calls: CreateSubscriptionInput[] = []
     const service = new DefaultStaffSubscriptionService(
