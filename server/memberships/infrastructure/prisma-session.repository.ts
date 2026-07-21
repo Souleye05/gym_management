@@ -1,6 +1,6 @@
 import type { PrismaClient as PrismaClientType } from '../../../lib/generated/prisma/client'
 import { PAYMENT_METHODS, SESSION_TYPES, type Session } from '../domain/entities'
-import type { SessionRepository } from '../repositories/session.repository'
+import type { CreateSessionInput, SessionRepository } from '../repositories/session.repository'
 import { validateEnum } from './validate-enum'
 
 type PrismaSessionRow = {
@@ -40,5 +40,30 @@ export class PrismaSessionRepository implements SessionRepository {
       take: limit,
     })
     return rows.map(toDomain)
+  }
+
+  async create(input: CreateSessionInput): Promise<Session> {
+    const row =
+      input.type === 'SUBSCRIBER'
+        ? await this.prisma.session.create({
+            data: {
+              type: 'SUBSCRIBER',
+              clientId: input.clientId,
+              amountPaid: input.amountPaid,
+              paymentMethod: input.paymentMethod,
+              createdByStaffId: input.createdByStaffId,
+            },
+          })
+        : await this.prisma.session.create({
+            data: {
+              type: 'VISITOR',
+              visitorName: input.visitorName,
+              visitorPhone: input.visitorPhone,
+              amountPaid: input.amountPaid,
+              paymentMethod: input.paymentMethod,
+              createdByStaffId: input.createdByStaffId,
+            },
+          })
+    return toDomain(row)
   }
 }

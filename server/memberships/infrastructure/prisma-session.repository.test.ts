@@ -3,6 +3,7 @@ import { prismaClient } from '../../shared/prisma-client'
 import { cleanMembershipsTables } from './test-helpers/clean-memberships-tables'
 import { cleanClientsTable } from '../../clients/infrastructure/test-helpers/clean-clients-table'
 import { createTestClient } from './test-helpers/create-test-client'
+import { createTestStaff } from './test-helpers/create-test-staff'
 import { PrismaSessionRepository } from './prisma-session.repository'
 
 const repository = new PrismaSessionRepository(prismaClient)
@@ -10,6 +11,7 @@ const repository = new PrismaSessionRepository(prismaClient)
 beforeEach(async () => {
   await cleanMembershipsTables()
   await cleanClientsTable()
+  await prismaClient.staffAccount.deleteMany()
 })
 
 describe('PrismaSessionRepository.findRecentByClientId', () => {
@@ -152,5 +154,46 @@ describe('sessions_type_consistency_check constraint', () => {
         },
       }),
     ).rejects.toThrow()
+  })
+})
+
+describe('PrismaSessionRepository.create', () => {
+  it('creates a SUBSCRIBER session with createdByStaffId set', async () => {
+    const clientId = await createTestClient('+33600002008')
+    const staffId = await createTestStaff('staff-create-sess@atlas.fit')
+
+    const result = await repository.create({
+      type: 'SUBSCRIBER',
+      clientId,
+      amountPaid: 8,
+      paymentMethod: 'CASH',
+      createdByStaffId: staffId,
+    })
+
+    expect(result.type).toBe('SUBSCRIBER')
+    expect(result.clientId).toBe(clientId)
+    expect(result.visitorName).toBeNull()
+    expect(result.visitorPhone).toBeNull()
+
+    const row = await prismaClient.session.findUniqueOrThrow({ where: { id: result.id } })
+    expect(row.createdByStaffId).toBe(staffId)
+  })
+
+  it('creates a VISITOR session with visitor fields set and clientId null', async () => {
+    const staffId = await createTestStaff('staff-create-visitor@atlas.fit')
+
+    const result = await repository.create({
+      type: 'VISITOR',
+      visitorName: 'Nadia Ferrand',
+      visitorPhone: '+33698765432',
+      amountPaid: 8,
+      paymentMethod: 'CASH',
+      createdByStaffId: staffId,
+    })
+
+    expect(result.type).toBe('VISITOR')
+    expect(result.clientId).toBeNull()
+    expect(result.visitorName).toBe('Nadia Ferrand')
+    expect(result.visitorPhone).toBe('+33698765432')
   })
 })
