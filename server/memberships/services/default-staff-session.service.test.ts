@@ -112,6 +112,24 @@ describe('DefaultStaffSessionService.recordSubscriberSession', () => {
     if (!result.ok) expect(result.error.code).toBe('client-not-found')
   })
 
+  it('never calls the subscription repository when the client check fails (fail-fast ordering)', async () => {
+    const service = new DefaultStaffSessionService(
+      fakeSubscriptionRepository({
+        findAllByClientId: async () => {
+          throw new Error('should not be called — client check must run first')
+        },
+      }),
+      fakeSessionRepository(),
+      fakeClientService({ getClient: async () => err({ code: 'not-found', message: 'Client introuvable.' }) }),
+      fakeSettingsService(),
+    )
+
+    const result = await service.recordSubscriberSession({ clientId: 'missing', paymentMethod: 'CASH', createdByStaffId: 'staff1' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('client-not-found')
+  })
+
   it('rejects with session-ineligible and reason "expired" when the subscription has ended', async () => {
     const expired: Subscription = { ...VALID_SUBSCRIPTION, endDate: new Date(Date.now() - 1000) }
     const service = new DefaultStaffSessionService(
@@ -163,6 +181,28 @@ describe('DefaultStaffSessionService.recordSubscriberSession', () => {
       expect(result.error.code).toBe('session-ineligible')
       expect(result.error.reason).toBe('none')
     }
+  })
+
+  it('never creates a session when the eligibility check fails (fail-fast ordering)', async () => {
+    const service = new DefaultStaffSessionService(
+      fakeSubscriptionRepository({ findAllByClientId: async () => [] }),
+      fakeSessionRepository({
+        create: async () => {
+          throw new Error('should not be called — eligibility check must run first')
+        },
+      }),
+      fakeClientService(),
+      fakeSettingsService({
+        getSettings: async () => {
+          throw new Error('should not be called — eligibility check must run first')
+        },
+      }),
+    )
+
+    const result = await service.recordSubscriberSession({ clientId: 'c1', paymentMethod: 'CASH', createdByStaffId: 'staff1' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('session-ineligible')
   })
 
   it('never lets a raw repository error message escape recordSubscriberSession', async () => {
