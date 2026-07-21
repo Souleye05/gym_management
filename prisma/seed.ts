@@ -27,6 +27,12 @@ async function main() {
     })
   }
 
+  await prisma.appSettings.upsert({
+    where: { id: 'singleton' },
+    update: {},
+    create: { id: 'singleton', sessionPrice: 8 },
+  })
+
   const adminSeed = STAFF_SEED.find((staff) => staff.role === Role.ADMIN)
   if (!adminSeed) throw new Error('STAFF_SEED has no ADMIN entry')
   const admin = await prisma.staffAccount.findUniqueOrThrow({ where: { email: adminSeed.email } })
