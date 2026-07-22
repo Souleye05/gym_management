@@ -5,6 +5,7 @@ import { cleanClientsTable } from '../../clients/infrastructure/test-helpers/cle
 import { createTestClient } from './test-helpers/create-test-client'
 import { createTestStaff } from './test-helpers/create-test-staff'
 import { PrismaSessionRepository } from './prisma-session.repository'
+import type { CreateSessionInput } from '../repositories/session.repository'
 
 const repository = new PrismaSessionRepository(prismaClient)
 
@@ -195,5 +196,18 @@ describe('PrismaSessionRepository.create', () => {
     expect(result.clientId).toBeNull()
     expect(result.visitorName).toBe('Nadia Ferrand')
     expect(result.visitorPhone).toBe('+33698765432')
+  })
+
+  it('lets the sessions_type_consistency_check constraint reject an invalid SUBSCRIBER input with no clientId, even through the repository write path', async () => {
+    const staffId = await createTestStaff('staff-create-invalid@atlas.fit')
+    const invalidInput = {
+      type: 'SUBSCRIBER',
+      clientId: null,
+      amountPaid: 8,
+      paymentMethod: 'CASH',
+      createdByStaffId: staffId,
+    } as unknown as CreateSessionInput
+
+    await expect(repository.create(invalidInput)).rejects.toThrow()
   })
 })

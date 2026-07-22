@@ -84,6 +84,23 @@ describe('DefaultStaffSubscriptionService.createOrRenewSubscription', () => {
     if (!result.ok) expect(result.error.code).toBe('client-not-found')
   })
 
+  it('returns client-inactive when the client exists but is deactivated', async () => {
+    const service = new DefaultStaffSubscriptionService(
+      fakeSubscriptionRepository(),
+      fakeClientService({ getClient: async () => ok({ ...CLIENT, isActive: false }) }),
+    )
+
+    const result = await service.createOrRenewSubscription({
+      clientId: 'c1',
+      planId: 'MONTHLY',
+      paymentMethod: 'CASH',
+      createdByStaffId: 'staff1',
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('client-inactive')
+  })
+
   it('never calls the subscription repository when the client check fails (fail-fast ordering)', async () => {
     const service = new DefaultStaffSubscriptionService(
       fakeSubscriptionRepository({

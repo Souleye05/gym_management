@@ -25,8 +25,56 @@ describe('middleware — protected API routes (defense-in-depth, cookie presence
     expect(res.status).toBe(401)
   })
 
+  it('returns 401 for /api/subscriptions with no access_token cookie', async () => {
+    const res = middleware(requestTo('/api/subscriptions'))
+
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 401 for /api/subscriptions/:id with no access_token cookie', async () => {
+    const res = middleware(requestTo('/api/subscriptions/abc123'))
+
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 401 for /api/sessions with no access_token cookie', async () => {
+    const res = middleware(requestTo('/api/sessions'))
+
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 401 for /api/sessions/:id with no access_token cookie', async () => {
+    const res = middleware(requestTo('/api/sessions/abc123'))
+
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 401 for /api/settings with no access_token cookie', async () => {
+    const res = middleware(requestTo('/api/settings'))
+
+    expect(res.status).toBe(401)
+  })
+
   it('lets the request through to the route handler when an access_token cookie is present', async () => {
     const res = middleware(requestTo('/api/clients', 'access_token=some-token'))
+
+    expect(res.status).not.toBe(401)
+  })
+
+  it('lets /api/subscriptions through to the route handler when an access_token cookie is present', async () => {
+    const res = middleware(requestTo('/api/subscriptions', 'access_token=some-token'))
+
+    expect(res.status).not.toBe(401)
+  })
+
+  it('lets /api/sessions through to the route handler when an access_token cookie is present', async () => {
+    const res = middleware(requestTo('/api/sessions', 'access_token=some-token'))
+
+    expect(res.status).not.toBe(401)
+  })
+
+  it('lets /api/settings through to the route handler when an access_token cookie is present', async () => {
+    const res = middleware(requestTo('/api/settings', 'access_token=some-token'))
 
     expect(res.status).not.toBe(401)
   })

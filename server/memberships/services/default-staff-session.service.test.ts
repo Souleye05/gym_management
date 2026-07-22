@@ -112,6 +112,20 @@ describe('DefaultStaffSessionService.recordSubscriberSession', () => {
     if (!result.ok) expect(result.error.code).toBe('client-not-found')
   })
 
+  it('returns client-inactive when the client exists but is deactivated', async () => {
+    const service = new DefaultStaffSessionService(
+      fakeSubscriptionRepository(),
+      fakeSessionRepository(),
+      fakeClientService({ getClient: async () => ok({ ...CLIENT, isActive: false }) }),
+      fakeSettingsService(),
+    )
+
+    const result = await service.recordSubscriberSession({ clientId: 'c1', paymentMethod: 'CASH', createdByStaffId: 'staff1' })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error.code).toBe('client-inactive')
+  })
+
   it('never calls the subscription repository when the client check fails (fail-fast ordering)', async () => {
     const service = new DefaultStaffSessionService(
       fakeSubscriptionRepository({

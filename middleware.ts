@@ -12,7 +12,7 @@ const CLIENT_PATHS = ['/accueil']
 // no JWT decode, no DB call) so it stays cheap on every request; its only job is to guarantee
 // a 401 by construction if a future controller under these paths is ever added without wiring
 // its own guard, rather than relying on every author remembering to do so.
-const PROTECTED_API_PATHS = ['/api/clients', '/api/client/me']
+const PROTECTED_API_PATHS = ['/api/clients', '/api/client/me', '/api/subscriptions', '/api/sessions', '/api/settings']
 
 function matchesPath(pathname: string, paths: string[]): boolean {
   return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
@@ -52,5 +52,8 @@ export const config = {
     '/accueil/:path*',
     '/api/clients/:path*',
     '/api/client/me/:path*',
+    '/api/subscriptions/:path*',
+    '/api/sessions/:path*',
+    '/api/settings/:path*',
   ],
 }

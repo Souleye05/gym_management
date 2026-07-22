@@ -12,6 +12,7 @@ import type { RecordSubscriberSessionInput, RecordVisitorSessionInput, StaffSess
 
 const SOURCE = 'StaffSessionService'
 const CLIENT_NOT_FOUND: MembershipDomainError = { code: 'client-not-found', message: 'Client introuvable.' }
+const CLIENT_INACTIVE: MembershipDomainError = { code: 'client-inactive', message: 'Ce client est désactivé.' }
 
 const INELIGIBLE_MESSAGES: Record<'none' | 'expired' | 'suspended', string> = {
   none: "Ce client n'a pas d'abonnement valide.",
@@ -29,8 +30,9 @@ export class DefaultStaffSessionService implements StaffSessionService {
 
   async recordSubscriberSession(input: RecordSubscriberSessionInput): Promise<Result<Session, MembershipDomainError>> {
     return guardAgainstLeakingInternals(SOURCE, async () => {
-      const clientResult = await this.clientService.getClient(input.clientId)
+      const clientResult = await this.clientService.getClient(input.clientId, { activeOnly: false })
       if (!clientResult.ok) return err(CLIENT_NOT_FOUND)
+      if (!clientResult.value.isActive) return err(CLIENT_INACTIVE)
 
       const subscriptions = await this.subscriptionRepository.findAllByClientId(input.clientId)
       const eligibility = checkSessionEligibility(subscriptions, new Date())

@@ -10,6 +10,7 @@ import type { CreateOrRenewSubscriptionInput, StaffSubscriptionService } from '.
 
 const SOURCE = 'StaffSubscriptionService'
 const CLIENT_NOT_FOUND: MembershipDomainError = { code: 'client-not-found', message: 'Client introuvable.' }
+const CLIENT_INACTIVE: MembershipDomainError = { code: 'client-inactive', message: 'Ce client est désactivé.' }
 const SUBSCRIPTION_NOT_FOUND: MembershipDomainError = { code: 'subscription-not-found', message: 'Abonnement introuvable.' }
 
 export class DefaultStaffSubscriptionService implements StaffSubscriptionService {
@@ -22,8 +23,9 @@ export class DefaultStaffSubscriptionService implements StaffSubscriptionService
     input: CreateOrRenewSubscriptionInput,
   ): Promise<Result<Subscription, MembershipDomainError>> {
     return guardAgainstLeakingInternals(SOURCE, async () => {
-      const clientResult = await this.clientService.getClient(input.clientId)
+      const clientResult = await this.clientService.getClient(input.clientId, { activeOnly: false })
       if (!clientResult.ok) return err(CLIENT_NOT_FOUND)
+      if (!clientResult.value.isActive) return err(CLIENT_INACTIVE)
 
       const subscriptions = await this.subscriptionRepository.findAllByClientId(input.clientId)
       const latest = subscriptions[0] ?? null
