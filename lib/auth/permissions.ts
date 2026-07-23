@@ -7,7 +7,7 @@ export type Permission =
   | 'sessions:manage'
   | 'scan:use'
   | 'statistics:view'
-  | 'settings:manage'
+  | 'settings:update'
 
 const ALL_PERMISSIONS: Permission[] = [
   'dashboard:view',
@@ -16,10 +16,10 @@ const ALL_PERMISSIONS: Permission[] = [
   'sessions:manage',
   'scan:use',
   'statistics:view',
-  'settings:manage',
+  'settings:update',
 ]
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: ALL_PERMISSIONS,
-  agent: ALL_PERMISSIONS.filter((p) => p !== 'settings:manage'),
+  agent: ALL_PERMISSIONS.filter((p) => p !== 'settings:update'),
 }
