@@ -68,7 +68,7 @@ export default function ParametresPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {editing ? (
-            <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
+            <form className="flex flex-col gap-3" noValidate onSubmit={handleSubmit}>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="session-price">Tarif (€)</Label>
                 <Input
