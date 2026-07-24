@@ -14,7 +14,7 @@ export function mergeActivityFeed(sources: ActivityFeedSources, limit: number): 
   const items: ActivityItem[] = [
     ...sources.subscriptionEvents.map((event) => ({
       id: event.id,
-      type: (event.isFirstForClient ? 'payment' : 'renewal') as const,
+      type: event.isFirstForClient ? ('payment' as const) : ('renewal' as const),
       clientId: event.clientId,
       name: event.clientName,
       detail: `${PLAN_CATALOG[event.planId].label} · ${event.amountPaid} €`,
