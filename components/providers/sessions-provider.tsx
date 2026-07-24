@@ -49,14 +49,14 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
         type: 'subscriber',
         id: `sess${Date.now()}`,
         clientId: input.clientId,
-        amountPaid: settings.sessionPrice,
+        amountPaid: settings?.sessionPrice ?? 8,
         paymentMethod: input.paymentMethod,
         checkedInAt: new Date().toISOString(),
       }
       setSessions((prev) => [...prev, created])
       return { ok: true, session: created }
     },
-    [settings.sessionPrice, getCurrentSubscription],
+    [settings?.sessionPrice, getCurrentSubscription],
   )
 
   const recordVisitorSession = useCallback(
@@ -66,14 +66,14 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
         id: `sess${Date.now()}`,
         fullName: input.fullName,
         phoneNumber: input.phoneNumber,
-        amountPaid: settings.sessionPrice,
+        amountPaid: settings?.sessionPrice ?? 8,
         paymentMethod: input.paymentMethod,
         checkedInAt: new Date().toISOString(),
       }
       setSessions((prev) => [...prev, created])
       return created
     },
-    [settings.sessionPrice],
+    [settings?.sessionPrice],
   )
 
   const getSessionsForClient = useCallback(
